@@ -38,22 +38,22 @@ jobs:
             os: windows-latest
             wails-platform: windows/amd64
             build-flags: ""
-            artifact-name: card-wizard.exe
-            artifact-path: build/bin/card-wizard.exe
+            artifact-name: card_wizard.exe
+            artifact-path: build/bin/card_wizard.exe
 
           - platform: Linux
             os: ubuntu-latest
             wails-platform: linux/amd64
             build-flags: "-tags webkit2_41"
-            artifact-name: card-wizard-linux-amd64
-            artifact-path: build/bin/card-wizard
+            artifact-name: card_wizard-linux-amd64
+            artifact-path: build/bin/card_wizard
 
           - platform: macOS
             os: macos-latest
             wails-platform: darwin/universal
             build-flags: ""
-            artifact-name: card-wizard.app.zip
-            artifact-path: build/bin/card-wizard.app
+            artifact-name: card_wizard.app.zip
+            artifact-path: build/bin/card_wizard.app.zip
 
     steps:
       - name: Checkout code
@@ -86,7 +86,7 @@ jobs:
         if: matrix.platform == 'macOS'
         run: |
           cd build/bin
-          zip -r card-wizard.app.zip card-wizard.app
+          zip -r card_wizard.app.zip card_wizard.app
 
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v1
