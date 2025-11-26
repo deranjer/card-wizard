@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - alpha
 
 permissions:
   contents: write
@@ -22,7 +21,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
       - name: Semantic Release
-        uses: cycjimmy/semantic-release-action@v6
+        uses: cycjimmy/semantic-release-action@v5
         id: semantic
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
