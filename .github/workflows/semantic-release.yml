@@ -20,18 +20,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-      - name: Semantic Release
-        uses: cycjimmy/semantic-release-action@v5
+      - name: Run go-semantic-release
+        uses: go-semantic-release/action@v1
         id: semantic
         with:
-          extra_plugins: |
-            @semantic-release/commit-analyzer@11.0.0
-            @semantic-release/release-notes-generator
-            @semantic-release/changelog
-            @semantic-release/git
-            @semantic-release/github
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          allow_initial_development_versions: true
+          force_generator: true
 
   build-and-upload:
     name: Build ${{ matrix.platform }}
