@@ -18,6 +18,27 @@
 - **Custom Fonts**: Load and use your own font files.
 - **Cross-Platform**: Built with Wails, running natively on Windows (Mac/Linux support planned).
 
+
+## 📸 Screenshots
+
+### Deck Details
+
+This shows how you use a spreadsheet like interface to layout all of your cards
+
+![Deck Details](docs/assets/deck_details.png)
+
+### Card Design
+
+This shows how you can layout the card design in a drag/drop interface with layers
+
+![Card Design](docs/assets/card_design.png)
+
+### Card Preview
+
+This shows how you can preview your cards via front or back.
+
+![Card Preview](docs/assets/card_preview.png)
+
 ## 🛠️ Tech Stack
 
 Card Wizard is built using a modern hybrid stack, combining the performance of Go with the flexibility of web technologies:

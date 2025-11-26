@@ -15,6 +15,9 @@ jobs:
   release:
     name: Semantic Release
     runs-on: ubuntu-latest
+    outputs:
+      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
+      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -30,6 +33,72 @@ jobs:
         run: npm install
 
       - name: Run semantic-release
+        id: semantic
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx semantic-release
+
+  build-and-upload:
+    name: Build ${{ matrix.platform }}
+    needs: release
+    if: needs.release.outputs.new_release_published == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - platform: Windows
+            os: windows-latest
+            wails-platform: windows/amd64
+            artifact-name: card-wizard.exe
+            artifact-path: build/bin/card-wizard.exe
+
+          - platform: Linux
+            os: ubuntu-latest
+            wails-platform: linux/amd64
+            artifact-name: card-wizard-linux-amd64
+            artifact-path: build/bin/card-wizard
+
+          - platform: macOS
+            os: macos-latest
+            wails-platform: darwin/universal
+            artifact-name: card-wizard.app.zip
+            artifact-path: build/bin/card-wizard.app
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          check-latest: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Build
+        run: wails build -platform ${{ matrix.wails-platform }}
+
+      - name: Zip macOS app bundle
+        if: matrix.platform == 'macOS'
+        run: |
+          cd build/bin
+          zip -r card-wizard.app.zip card-wizard.app
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ needs.release.outputs.new_release_version }}
+          files: ${{ matrix.artifact-path }}
