@@ -51,9 +51,9 @@ export function Layout() {
           </Tabs.List>
 
           <Tabs.Panel value="details">
-            <DeckDetails 
-              deck={deck} 
-              setDeck={setDeck} 
+            <DeckDetails
+              deck={deck}
+              setDeck={setDeck}
               onDeckLoad={() => setLoadId(prev => prev + 1)}
               onNavigateToHelp={navigateToHelp}
             />

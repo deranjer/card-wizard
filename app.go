@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"github.com/xuri/excelize/v2"
@@ -17,8 +19,9 @@ import (
 
 // App struct
 type App struct {
-	ctx      context.Context
-	cardsSvc *cards.Service
+	ctx             context.Context
+	cardsSvc        *cards.Service
+	currentDeckPath string // Path to the currently loaded/saved deck file
 }
 
 // NewApp creates a new App application struct
@@ -172,6 +175,13 @@ func (a *App) SaveDeck(d deck.Deck) error {
 		return nil // User cancelled
 	}
 
+	// Store the deck path for relative path resolution
+	a.currentDeckPath = selection
+
+	// Convert absolute image paths to relative paths before saving
+	deckDir := filepath.Dir(selection)
+	d = a.convertPathsToRelative(d, deckDir)
+
 	data, err := json.MarshalIndent(d, "", "  ")
 	if err != nil {
 		return err
@@ -194,6 +204,9 @@ func (a *App) LoadDeck() (*deck.Deck, error) {
 	if selection == "" {
 		return nil, nil // User cancelled
 	}
+
+	// Store the deck path for relative path resolution
+	a.currentDeckPath = selection
 
 	data, err := os.ReadFile(selection)
 	if err != nil {
@@ -252,7 +265,10 @@ func (a *App) SelectFontFile() (string, error) {
 
 // LoadImageAsDataURL reads a local image file and returns base64 content
 func (a *App) LoadImageAsDataURL(path string) (string, error) {
-	data, err := os.ReadFile(path)
+	// Resolve relative paths against the deck directory
+	resolvedPath := a.resolveImagePath(path)
+
+	data, err := os.ReadFile(resolvedPath)
 	if err != nil {
 		return "", err
 	}
@@ -264,4 +280,58 @@ func (a *App) LoadImageAsDataURL(path string) (string, error) {
 // GetPDFLayout returns the layout configuration for the PDF
 func (a *App) GetPDFLayout(d deck.Deck) (deck.PDFLayout, error) {
 	return pdf.CalculateLayout(d), nil
+}
+
+// resolveImagePath resolves a potentially relative image path to an absolute path
+func (a *App) resolveImagePath(path string) string {
+	// If already absolute, return as-is
+	if filepath.IsAbs(path) {
+		return path
+	}
+
+	// If no deck is loaded, return path as-is (will likely fail, but that's expected)
+	if a.currentDeckPath == "" {
+		return path
+	}
+
+	// Resolve relative to deck directory
+	deckDir := filepath.Dir(a.currentDeckPath)
+	return filepath.Join(deckDir, path)
+}
+
+// convertPathsToRelative converts all absolute image paths in a deck to relative paths
+func (a *App) convertPathsToRelative(d deck.Deck, deckDir string) deck.Deck {
+	// Convert paths in card data
+	for i := range d.Cards {
+		d.Cards[i].Data = a.convertMapPathsToRelative(d.Cards[i].Data, deckDir)
+	}
+
+	return d
+}
+
+// convertMapPathsToRelative converts absolute paths in a map to relative paths
+func (a *App) convertMapPathsToRelative(data map[string]interface{}, deckDir string) map[string]interface{} {
+	result := make(map[string]interface{})
+
+	for key, value := range data {
+		if strValue, ok := value.(string); ok {
+			// Check if this looks like a file path (contains path separators or drive letters)
+			if strings.Contains(strValue, string(filepath.Separator)) || strings.Contains(strValue, "/") || strings.Contains(strValue, ":\\") {
+				// Try to make it relative
+				if filepath.IsAbs(strValue) {
+					relPath, err := filepath.Rel(deckDir, strValue)
+					if err == nil {
+						// Successfully made relative - use forward slashes for cross-platform compatibility
+						relPath = filepath.ToSlash(relPath)
+						result[key] = relPath
+						continue
+					}
+				}
+			}
+		}
+		// Keep value as-is if not a convertible path
+		result[key] = value
+	}
+
+	return result
 }

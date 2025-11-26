@@ -9,13 +9,14 @@ import { ImageLoader } from './ImageLoader';
 interface SpreadsheetViewProps {
   deck: Deck;
   setDeck: (deck: Deck) => void;
+  compact?: boolean;
 }
 
 interface ColumnWidths {
   [key: string]: number;
 }
 
-export function SpreadsheetView({ deck, setDeck }: SpreadsheetViewProps) {
+export function SpreadsheetView({ deck, setDeck, compact = false }: SpreadsheetViewProps) {
   const [newFieldName, setNewFieldName] = useState('');
   const [newFieldType, setNewFieldType] = useState<string | null>('text');
   const [isAddingField, setIsAddingField] = useState(false);
@@ -155,7 +156,7 @@ export function SpreadsheetView({ deck, setDeck }: SpreadsheetViewProps) {
       type: 'text' as const,
     }));
     if (discoveredFields.length > 0) {
-        // We can't update state during render, so this is a bit tricky. 
+        // We can't update state during render, so this is a bit tricky.
         // Ideally, this should be done on load. For now, let's just render them.
     }
   }
@@ -169,6 +170,9 @@ export function SpreadsheetView({ deck, setDeck }: SpreadsheetViewProps) {
     return `/local-image?path=${encodeURIComponent(path)}`;
   };
 
+  const inputSize = compact ? 'xs' : 'sm';
+  const tableVerticalSpacing = compact ? 2 : 'xs';
+
   return (
     <Stack>
       <Group justify="space-between">
@@ -177,7 +181,7 @@ export function SpreadsheetView({ deck, setDeck }: SpreadsheetViewProps) {
       </Group>
 
       <div style={{ overflowX: 'auto' }}>
-        <Table striped highlightOnHover withTableBorder withColumnBorders>
+        <Table striped highlightOnHover withTableBorder withColumnBorders verticalSpacing={tableVerticalSpacing}>
           <Table.Thead>
             <Table.Tr>
               <Table.Th style={{ width: columnWidths.id || 100, position: 'relative' }}>
@@ -312,44 +316,48 @@ export function SpreadsheetView({ deck, setDeck }: SpreadsheetViewProps) {
                       // Check for duplicate IDs
                       const isDuplicate = deck.cards.some((c, i) => i !== index && c.id === newId);
                       if (isDuplicate && newId !== '') {
-                        notifications.show({ 
-                          title: 'Error', 
-                          message: 'Card ID must be unique', 
-                          color: 'red' 
+                        notifications.show({
+                          title: 'Error',
+                          message: 'Card ID must be unique',
+                          color: 'red'
                         });
                         return;
                       }
                       updateCardMeta(index, 'id', newId);
                     }}
                     variant="unstyled"
-                    size="xs"
+                    size={inputSize}
+                    styles={{ input: { paddingLeft: compact ? 4 : undefined, paddingRight: compact ? 4 : undefined } }}
                   />
                 </Table.Td>
                 <Table.Td>
-                    <NumberInput 
-                        value={card.count || 1} 
-                        onChange={(val) => updateCardMeta(index, 'count', Number(val))} 
-                        min={1} 
-                        size="xs" 
-                        variant="unstyled" 
+                    <NumberInput
+                        value={card.count || 1}
+                        onChange={(val) => updateCardMeta(index, 'count', Number(val))}
+                        min={1}
+                        size={inputSize}
+                        variant="unstyled"
+                        styles={{ input: { paddingLeft: compact ? 4 : undefined, paddingRight: compact ? 4 : undefined } }}
                     />
                 </Table.Td>
                 <Table.Td>
-                    <Select 
-                        data={frontStyleOptions} 
-                        value={card.frontStyleId || 'default-front'} 
-                        onChange={(val) => updateCardMeta(index, 'frontStyleId', val)} 
-                        size="xs" 
-                        variant="unstyled" 
+                    <Select
+                        data={frontStyleOptions}
+                        value={card.frontStyleId || 'default-front'}
+                        onChange={(val) => updateCardMeta(index, 'frontStyleId', val)}
+                        size={inputSize}
+                        variant="unstyled"
+                        styles={{ input: { paddingLeft: compact ? 4 : undefined, paddingRight: compact ? 4 : undefined } }}
                     />
                 </Table.Td>
                 <Table.Td>
-                    <Select 
-                        data={backStyleOptions} 
-                        value={card.backStyleId || 'default-back'} 
-                        onChange={(val) => updateCardMeta(index, 'backStyleId', val)} 
-                        size="xs" 
-                        variant="unstyled" 
+                    <Select
+                        data={backStyleOptions}
+                        value={card.backStyleId || 'default-back'}
+                        onChange={(val) => updateCardMeta(index, 'backStyleId', val)}
+                        size={inputSize}
+                        variant="unstyled"
+                        styles={{ input: { paddingLeft: compact ? 4 : undefined, paddingRight: compact ? 4 : undefined } }}
                     />
                 </Table.Td>
                 {deck.fields.map(field => (
@@ -359,19 +367,20 @@ export function SpreadsheetView({ deck, setDeck }: SpreadsheetViewProps) {
                         value={card.data[field.name] || ''}
                         onChange={(e) => updateCardData(index, field.name, e.currentTarget.value)}
                         variant="unstyled"
-                        size="xs"
+                        size={inputSize}
+                        styles={{ input: { paddingLeft: compact ? 4 : undefined, paddingRight: compact ? 4 : undefined } }}
                       />
                     ) : (
                       <Group wrap="nowrap" gap="xs">
                          {card.data[field.name] && (
-                            <ImageLoader 
-                                path={card.data[field.name]} 
-                                style={{ 
-                                    width: 30, 
-                                    height: 30, 
+                            <ImageLoader
+                                path={card.data[field.name]}
+                                style={{
+                                    width: compact ? 24 : 30,
+                                    height: compact ? 24 : 30,
                                     borderRadius: 4,
                                     objectFit: 'cover'
-                                }} 
+                                }}
                             />
                          )}
                          <TextInput
@@ -379,19 +388,20 @@ export function SpreadsheetView({ deck, setDeck }: SpreadsheetViewProps) {
                             value={card.data[field.name] || ''}
                             onChange={(e) => updateCardData(index, field.name, e.currentTarget.value)}
                             variant="unstyled"
-                            size="xs"
+                            size={inputSize}
                             style={{ flex: 1 }}
+                            styles={{ input: { paddingLeft: compact ? 4 : undefined, paddingRight: compact ? 4 : undefined } }}
                          />
-                         <ActionIcon variant="subtle" color="gray" onClick={() => handleSelectImage(index, field.name)}>
-                            <IconFolder size={14} />
+                         <ActionIcon variant="subtle" color="gray" onClick={() => handleSelectImage(index, field.name)} size={inputSize}>
+                            <IconFolder size={compact ? 12 : 14} />
                          </ActionIcon>
                       </Group>
                     )}
                   </Table.Td>
                 ))}
                 <Table.Td>
-                  <ActionIcon color="red" variant="subtle" onClick={() => removeCard(index)}>
-                    <IconTrash size={16} />
+                  <ActionIcon color="red" variant="subtle" onClick={() => removeCard(index)} size={inputSize}>
+                    <IconTrash size={compact ? 14 : 16} />
                   </ActionIcon>
                 </Table.Td>
               </Table.Tr>

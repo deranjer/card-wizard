@@ -41,7 +41,7 @@ export function PrintPreview({ deck, onNavigateToHelp }: PrintPreviewProps) {
         setLoading(false);
       }
     };
-    
+
     fetchLayout();
   }, [deck]);
 
@@ -55,37 +55,37 @@ export function PrintPreview({ deck, onNavigateToHelp }: PrintPreviewProps) {
     setGenerating(true);
     try {
       const images: RenderedCardImage[] = [];
-      
+
       // Collect unique styles
       const frontStyles = new Set(deck.cards.map(c => c.frontStyleId || 'default-front'));
       const backStyles = new Set(deck.cards.map(c => c.backStyleId || 'default-back'));
-      
+
       // Render front cards
       for (const styleId of frontStyles) {
        const sampleCard = deck.cards.find(c => (c.frontStyleId || 'default-front') === styleId) || deck.cards[0];
         const refKey = `front-${styleId}`;
         const element = cardRefs.current.get(refKey);
-        
+
         if (element) {
           const MM_TO_PX = 3.7795275591;
           const image = await renderCardToImage(element, deck.width * MM_TO_PX, deck.height * MM_TO_PX);
           images.push({ styleId, side: 'front', image });
         }
       }
-      
+
       // Render back cards
       for (const styleId of backStyles) {
         const sampleCard = deck.cards.find(c => (c.backStyleId || 'default-back') === styleId) || deck.cards[0];
         const refKey = `back-${styleId}`;
         const element = cardRefs.current.get(refKey);
-        
+
         if (element) {
           const MM_TO_PX = 3.7795275591;
           const image = await renderCardToImage(element, deck.width * MM_TO_PX, deck.height * MM_TO_PX);
           images.push({ styleId, side: 'back', image });
         }
       }
-      
+
       setRenderedImages(images);
       setPreviewGenerated(true);
       notifications.show({ title: 'Success', message: 'Preview generated successfully' });
@@ -109,7 +109,7 @@ export function PrintPreview({ deck, onNavigateToHelp }: PrintPreviewProps) {
         renderedCards: renderedImages,
         drawCutGuides: showCutGuides,
       };
-      
+
       await GeneratePDF(deckWithImages as any);
       notifications.show({ title: 'Success', message: 'PDF generated successfully' });
     } catch (err) {
@@ -155,9 +155,9 @@ export function PrintPreview({ deck, onNavigateToHelp }: PrintPreviewProps) {
             </Text>
           </div>
           {onNavigateToHelp && (
-            <ActionIcon 
-              variant="subtle" 
-              color="blue" 
+            <ActionIcon
+              variant="subtle"
+              color="blue"
               onClick={() => onNavigateToHelp('print')}
               title="Help for this tab"
             >
@@ -244,10 +244,10 @@ export function PrintPreview({ deck, onNavigateToHelp }: PrintPreviewProps) {
               {pageCards.map((card, index) => {
                 const row = Math.floor(index / layout.cardsPerRow);
                 const col = index % layout.cardsPerRow;
-                
+
                 // Mirror columns for back page (Standard Duplex)
                 const displayCol = previewMode === 'back' ? (layout.cardsPerRow - 1 - col) : col;
-                
+
                 const x = (layout.marginLeft + displayCol * (layout.cardWidth + layout.spacing)) * MM_TO_PX * previewScale;
                 const y = (layout.marginTop + row * (layout.cardHeight + layout.spacing)) * MM_TO_PX * previewScale;
 
@@ -273,9 +273,9 @@ export function PrintPreview({ deck, onNavigateToHelp }: PrintPreviewProps) {
                     }}
                   >
                     {renderedImage ? (
-                      <img 
-                        src={renderedImage.image} 
-                        style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
+                      <img
+                        src={renderedImage.image}
+                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                         alt="card"
                       />
                     ) : (
@@ -300,12 +300,12 @@ export function PrintPreview({ deck, onNavigateToHelp }: PrintPreviewProps) {
                 if (el) cardRefs.current.set(`front-${styleId}`, el);
               }}
             >
-              <CardRender 
-                card={sampleCard} 
-                deck={deck} 
-                mode="front" 
-                scale={1} 
-                border={false} 
+              <CardRender
+                card={sampleCard}
+                deck={deck}
+                mode="front"
+                scale={1}
+                border={false}
               />
             </div>
           );
@@ -319,12 +319,12 @@ export function PrintPreview({ deck, onNavigateToHelp }: PrintPreviewProps) {
                 if (el) cardRefs.current.set(`back-${styleId}`, el);
               }}
             >
-              <CardRender 
-                card={sampleCard} 
-                deck={deck} 
-                mode="back" 
-                scale={1} 
-                border={false} 
+              <CardRender
+                card={sampleCard}
+                deck={deck}
+                mode="back"
+                scale={1}
+                border={false}
               />
             </div>
           );

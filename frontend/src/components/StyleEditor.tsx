@@ -1,6 +1,6 @@
 import { Stack, Group, Button, Text, Paper, Select, ColorInput, NumberInput, TextInput, ActionIcon, ScrollArea, SegmentedControl, Center } from '@mantine/core';
 import { Deck, CardLayout, LayoutElement } from '../types';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Rnd } from 'react-rnd';
 import { IconPlus, IconTrash, IconGripVertical } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
@@ -20,31 +20,33 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
   const [zoom, setZoom] = useState(1);
   const [renderKey, setRenderKey] = useState(0);
   const [canvasReady, setCanvasReady] = useState(false);
+  const observerRef = useRef<ResizeObserver | null>(null);
 
-  // Use callback ref to detect when canvas is mounted/remounted
-  const setCanvasRef = (node: HTMLDivElement | null) => {
-    console.log("setCanvasRef called with node:", node);
+  const setCanvasRef = useCallback((node: HTMLDivElement | null) => {
+    // Cleanup previous observer
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+      observerRef.current = null;
+    }
+
     if (node) {
-      // Use requestAnimationFrame to wait for browser layout
-      requestAnimationFrame(() => {
-        const width = node.offsetWidth;
-        const height = node.offsetHeight;
-        console.log("Canvas dimensions in callback:", width, "x", height);
-        
-        // Only mark as ready when canvas has non-zero dimensions
-        if (width > 0 && height > 0) {
-          console.log("Setting canvasReady to TRUE");
-          setCanvasReady(true);
-        } else {
-          console.log("Setting canvasReady to FALSE (zero dimensions)");
-          setCanvasReady(false);
+      // Create new observer
+      observerRef.current = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const { width, height } = entry.contentRect;
+          if (width > 0 && height > 0) {
+            setCanvasReady(true);
+          } else {
+            setCanvasReady(false);
+          }
         }
       });
+
+      observerRef.current.observe(node);
     } else {
-      console.log("Setting canvasReady to FALSE (node is null)");
       setCanvasReady(false);
     }
-  };
+  }, []);
 
   // Initialize selection when tab changes or deck is loaded
   useEffect(() => {
@@ -62,13 +64,13 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
     }
   }, [selectedStyleId]);
 
-  const currentStyle = selectedStyleId 
+  const currentStyle = selectedStyleId
     ? (activeTab === 'front' ? deck.frontStyles[selectedStyleId] : deck.backStyles[selectedStyleId])
     : null;
 
   const handleStyleChange = (newLayout: CardLayout) => {
     if (!selectedStyleId) return;
-    
+
     if (activeTab === 'front') {
         setDeck({
             ...deck,
@@ -130,7 +132,7 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
 
     // Reverse back to storage order (bottom layer first)
     const newElements = reversedItems.reverse();
-    
+
     handleStyleChange({ ...currentStyle, elements: newElements });
   };
 
@@ -140,7 +142,7 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
           name: `New ${activeTab === 'front' ? 'Front' : 'Back'}`,
           elements: []
       };
-      
+
       if (activeTab === 'front') {
           setDeck({ ...deck, frontStyles: { ...deck.frontStyles, [id]: newStyle } });
       } else {
@@ -156,20 +158,20 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
 
   const deleteStyle = () => {
       if (!selectedStyleId) return;
-      
+
       const styles = activeTab === 'front' ? deck.frontStyles : deck.backStyles;
       const styleIds = Object.keys(styles);
-      
+
       if (styleIds.length <= 1) {
           notifications.show({ title: 'Error', message: 'Cannot delete the last style.', color: 'red' });
           return;
       }
-      
+
       if (!confirm('Are you sure you want to delete this style?')) return;
 
       const newStyles = { ...styles };
       delete newStyles[selectedStyleId];
-      
+
       // Fallback ID for cards using this style
       const fallbackId = styleIds.find(id => id !== selectedStyleId) || '';
 
@@ -189,7 +191,7 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
       } else {
           setDeck({ ...deck, backStyles: newStyles, cards: newCards });
       }
-      
+
       setSelectedStyleId(fallbackId);
   };
 
@@ -208,15 +210,15 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
     <Group align="flex-start" h="calc(100vh - 140px)" gap={0}>
       {/* Left Sidebar: Style & Element Properties */}
       <Stack w={300} h="100%" style={{ borderRight: '1px solid #eee' }} p="md">
-        <SegmentedControl 
-            value={activeTab} 
-            onChange={(val) => setActiveTab(val as 'front' | 'back')} 
+        <SegmentedControl
+            value={activeTab}
+            onChange={(val) => setActiveTab(val as 'front' | 'back')}
             data={[{ label: 'Fronts', value: 'front' }, { label: 'Backs', value: 'back' }]}
         />
-        
+
         <Group>
-            <Select 
-                label="Select Style" 
+            <Select
+                label="Select Style"
                 data={Object.keys(activeTab === 'front' ? deck.frontStyles : deck.backStyles).map(id => ({
                     value: id,
                     label: (activeTab === 'front' ? deck.frontStyles[id].name : deck.backStyles[id].name)
@@ -229,10 +231,10 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
         </Group>
 
         <Group align="flex-end">
-            <TextInput 
-                label="Style Name" 
-                value={currentStyle.name} 
-                onChange={(e) => renameStyle(e.currentTarget.value)} 
+            <TextInput
+                label="Style Name"
+                value={currentStyle.name}
+                onChange={(e) => renameStyle(e.currentTarget.value)}
                 style={{ flex: 1 }}
             />
             <ActionIcon color="red" variant="light" onClick={deleteStyle} mb={4} title="Delete Style">
@@ -334,7 +336,7 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
                     const elementHeight = el.height * MM_TO_PX * scale;
                     const elementX = el.x * MM_TO_PX * scale;
                     const elementY = el.y * MM_TO_PX * scale;
-                    
+
                     return (
                     <Rnd
                         key={el.id}
@@ -345,9 +347,9 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
                             height: elementHeight
                         }}
                         onDragStop={(e, d) => {
-                            updateElement(el.id, { 
-                                x: d.x / scale / MM_TO_PX, 
-                                y: d.y / scale / MM_TO_PX 
+                            updateElement(el.id, {
+                                x: d.x / scale / MM_TO_PX,
+                                y: d.y / scale / MM_TO_PX
                             });
                         }}
                         onResizeStop={(e, direction, ref, delta, position) => {
@@ -369,11 +371,11 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
                             zIndex: selectedElementId === el.id ? 1000 : 'auto', // Bring selected to front temporarily
                         }}
                     >
-                        <div style={{ 
-                            width: '100%', 
-                            height: '100%', 
-                            display: 'flex', 
-                            alignItems: 'center', 
+                        <div style={{
+                            width: '100%',
+                            height: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
                             justifyContent: 'center',
                             overflow: 'hidden',
                             color: el.color,
@@ -413,12 +415,12 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
                               {[...currentStyle.elements].reverse().map((el, index) => (
                                   <Draggable key={el.id} draggableId={el.id} index={index}>
                                       {(provided, snapshot) => (
-                                          <Paper 
+                                          <Paper
                                             ref={provided.innerRef}
                                             {...provided.draggableProps}
-                                            p="xs" 
-                                            withBorder 
-                                            style={{ 
+                                            p="xs"
+                                            withBorder
+                                            style={{
                                                 ...provided.draggableProps.style,
                                                 cursor: 'pointer',
                                                 backgroundColor: selectedElementId === el.id ? '#e7f5ff' : 'white',
@@ -447,7 +449,7 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
                       )}
                   </Droppable>
               </DragDropContext>
-              
+
               {currentStyle.elements.length === 0 && (
                   <Text size="sm" c="dimmed" ta="center" py="xl">No elements</Text>
               )}

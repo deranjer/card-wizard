@@ -10,7 +10,7 @@
                 "cost": "2",
                 "description": "A weathered blade that's seen better days. Still sharp enough to get the job done.",
                 "tier": "Bronze",
-                "image": "E:\\Programming\\card-wizard\\example_deck\\images\\bronze_weapon_card_back.png"
+                "image": "images/bronze_weapon_card_back.png"
             },
             "count": 3,
             "frontStyleId": "weapon-front-bronze",
@@ -23,7 +23,7 @@
                 "cost": "1",
                 "description": "Simple but effective. What it lacks in finesse, it makes up for in reliability.",
                 "tier": "Bronze",
-                "image": "E:\\Programming\\card-wizard\\example_deck\\images\\bronze_weapon_card_back.png"
+                "image": "images/bronze_weapon_card_back.png"
             },
             "count": 3,
             "frontStyleId": "weapon-front-bronze",
@@ -36,7 +36,7 @@
                 "cost": "3",
                 "description": "A basic bow crafted from ash wood. Perfect for beginners learning the art of archery.",
                 "tier": "Bronze",
-                "image": "E:\\Programming\\card-wizard\\example_deck\\images\\bronze_weapon_card_back.png"
+                "image": "images/bronze_weapon_card_back.png"
             },
             "count": 3,
             "frontStyleId": "weapon-front-bronze",
@@ -49,7 +49,7 @@
                 "cost": "5",
                 "description": "Forged by skilled hands, this blade cuts through armor with ease. A warrior's trusted companion.",
                 "tier": "Silver",
-                "image": "E:\\Programming\\card-wizard\\example_deck\\images\\silver_weapon_card_back.png"
+                "image": "images/silver_weapon_card_back.png"
             },
             "count": 3,
             "frontStyleId": "weapon-front-silver",
@@ -62,7 +62,7 @@
                 "cost": "6",
                 "description": "Heavy and devastating. One swing can shatter shields and break bones.",
                 "tier": "Silver",
-                "image": "E:\\Programming\\card-wizard\\example_deck\\images\\silver_weapon_card_back.png"
+                "image": "images/silver_weapon_card_back.png"
             },
             "count": 3,
             "frontStyleId": "weapon-front-silver",
@@ -75,7 +75,7 @@
                 "cost": "7",
                 "description": "Precision engineering meets deadly force. Pierces plate armor from a hundred paces.",
                 "tier": "Silver",
-                "image": "E:\\Programming\\card-wizard\\example_deck\\images\\silver_weapon_card_back.png"
+                "image": "images/silver_weapon_card_back.png"
             },
             "count": 3,
             "frontStyleId": "weapon-front-silver",
@@ -88,7 +88,7 @@
                 "cost": "12",
                 "description": "Legendary greatsword imbued with ancient magic. Said to have felled the great wyrm Infernus.",
                 "tier": "Gold",
-                "image": "E:\\Programming\\card-wizard\\example_deck\\images\\gold_weapon_card_back.png"
+                "image": "images/gold_weapon_card_back.png"
             },
             "count": 3,
             "frontStyleId": "weapon-front-gold",
@@ -101,7 +101,7 @@
                 "cost": "10",
                 "description": "Crackling with elemental fury, each strike calls down lightning from the heavens.",
                 "tier": "Gold",
-                "image": "E:\\Programming\\card-wizard\\example_deck\\images\\gold_weapon_card_back.png"
+                "image": "images/gold_weapon_card_back.png"
             },
             "count": 3,
             "frontStyleId": "weapon-front-gold",
@@ -114,7 +114,7 @@
                 "cost": "11",
                 "description": "Arrows shot from this bow ignite mid-flight, leaving trails of flame in their wake.",
                 "tier": "Gold",
-                "image": "E:\\Programming\\card-wizard\\example_deck\\images\\gold_weapon_card_back.png"
+                "image": "images/gold_weapon_card_back.png"
             },
             "count": 3,
             "frontStyleId": "weapon-front-gold",

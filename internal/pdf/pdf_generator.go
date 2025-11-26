@@ -1,53 +1,63 @@
 package pdf
 
 import (
+	"encoding/base64"
 	"fmt"
-
-	"github.com/johnfercher/maroto/v2"
-	"github.com/johnfercher/maroto/v2/pkg/components/text"
-	"github.com/johnfercher/maroto/v2/pkg/config"
-	"github.com/johnfercher/maroto/v2/pkg/consts/align"
-	"github.com/johnfercher/maroto/v2/pkg/consts/fontstyle"
-	"github.com/johnfercher/maroto/v2/pkg/consts/pagesize"
-	"github.com/johnfercher/maroto/v2/pkg/core"
-	"github.com/johnfercher/maroto/v2/pkg/props"
+	"strings"
 
 	"card_wizard/internal/deck"
+
+	"github.com/jung-kurt/gofpdf"
 )
 
-type Generator struct{}
+type GeneratorNew struct{}
 
-func NewGenerator() *Generator {
-	return &Generator{}
+func NewGenerator() *GeneratorNew {
+	return &GeneratorNew{}
 }
 
-func (g *Generator) Generate(d deck.Deck, outputPath string) error {
-	cfg := config.NewBuilder().
-		WithPageSize(pagesize.A4).
-		WithLeftMargin(10).
-		WithTopMargin(10).
-		WithRightMargin(10).
-		WithBottomMargin(10).
-		Build()
+// Generate creates a PDF with precise positioning using gofpdf
+// Pages are interleaved: front1, back1, front2, back2, etc. for duplex printing
+func (g *GeneratorNew) Generate(d deck.Deck, outputPath string) error {
+	// Calculate layout
+	layout := CalculateLayout(d)
 
-	m := maroto.New(cfg)
+	pageType := "Letter"
+	if layout.PageWidth == 210.0 {
+		pageType = "A4"
+	}
 
-	// Calculate cards per page
-	// A4 is 210mm x 297mm
-	// Margins are 10mm
-	// Printable area: 190mm x 277mm
+	pdf := gofpdf.New("P", "mm", pageType, "")
+	pdf.SetMargins(0, 0, 0) // We handle margins manually
+	pdf.SetAutoPageBreak(false, 0)
 
-	printableHeight := 277.0
-	rowHeight := 40.0
-	headerHeight := 10.0
+	// Register rendered card images
+	imageMap := make(map[string]string) // key: styleId-side, value: image name in PDF
 
-	m.AddRow(headerHeight,
-		text.NewCol(12, "Deck: "+d.Name, props.Text{
-			Top:   3,
-			Style: fontstyle.Bold,
-			Align: align.Center,
-		}),
-	)
+	for i, renderedCard := range d.RenderedCards {
+		// Decode base64 image
+		imageData := renderedCard.Image
+		if strings.HasPrefix(imageData, "data:image/png;base64,") {
+			imageData = strings.TrimPrefix(imageData, "data:image/png;base64,")
+		}
+
+		decoded, err := base64.StdEncoding.DecodeString(imageData)
+		if err != nil {
+			continue
+		}
+
+		// Register image with gofpdf
+		imageName := fmt.Sprintf("card_%s_%s_%d", renderedCard.StyleID, renderedCard.Side, i)
+		imageOpts := gofpdf.ImageOptions{
+			ImageType: "PNG",
+			ReadDpi:   true,
+		}
+
+		pdf.RegisterImageOptionsReader(imageName, imageOpts, strings.NewReader(string(decoded)))
+
+		key := fmt.Sprintf("%s-%s", renderedCard.StyleID, renderedCard.Side)
+		imageMap[key] = imageName
+	}
 
 	// Expand cards based on Count
 	var expandedCards []deck.Card
@@ -61,25 +71,9 @@ func (g *Generator) Generate(d deck.Deck, outputPath string) error {
 		}
 	}
 
-	cardsPerRow := 3
-	var currentRow []core.Col
+	cardsPerPage := layout.CardsPerRow * layout.CardsPerCol
 
-	// Calculate rows per page based on height
-	// First page has header
-	rowsFirstPage := int((printableHeight - headerHeight) / rowHeight)
-	rowsOtherPages := int(printableHeight / rowHeight)
-
-	// For simplicity, let's use a fixed batch size that fits on the first page
-	// and use spacers to force breaks.
-	rowsPerBatch := rowsFirstPage
-	if rowsPerBatch > rowsOtherPages {
-		rowsPerBatch = rowsOtherPages
-	}
-	// Let's be conservative
-	rowsPerBatch = 6
-
-	cardsPerPage := cardsPerRow * rowsPerBatch
-
+	// Render pages with fronts and backs interleaved for duplex printing
 	for i := 0; i < len(expandedCards); i += cardsPerPage {
 		end := i + cardsPerPage
 		if end > len(expandedCards) {
@@ -88,138 +82,79 @@ func (g *Generator) Generate(d deck.Deck, outputPath string) error {
 
 		pageCards := expandedCards[i:end]
 
-		// Track height used in this page
-		currentHeight := 0.0
-		if i == 0 {
-			currentHeight += headerHeight
-		}
-
-		// 1. Render Fronts
-		rowsInBatch := (len(pageCards) + cardsPerRow - 1) / cardsPerRow
+		// Render FRONTS page
+		pdf.AddPage()
 
 		for j, card := range pageCards {
-			// Get Front Style
+			row := j / layout.CardsPerRow
+			col := j % layout.CardsPerRow
+
+			x := layout.MarginLeft + float64(col)*(layout.CardWidth+layout.Spacing)
+			y := layout.MarginTop + float64(row)*(layout.CardHeight+layout.Spacing)
+
+			// Get card image
 			styleID := card.FrontStyleID
 			if styleID == "" {
 				styleID = "default-front"
 			}
-			layout, ok := d.FrontStyles[styleID]
-			if !ok {
-				// Fallback or empty
-				layout = deck.CardLayout{Elements: []deck.LayoutElement{}}
+
+			key := fmt.Sprintf("%s-front", styleID)
+			if imageName, ok := imageMap[key]; ok {
+				pdf.Image(imageName, x, y, layout.CardWidth, layout.CardHeight, false, "", 0, "")
+			} else {
+				// Fallback: draw a border if image not found
+				pdf.SetDrawColor(200, 200, 200)
+				pdf.Rect(x, y, layout.CardWidth, layout.CardHeight, "D")
 			}
 
-			// Create a column for the card
-			cardContent := fmt.Sprintf("%s\n", card.ID)
-			for _, el := range layout.Elements {
-				if el.Type == "text" {
-					if el.StaticText != "" {
-						cardContent += fmt.Sprintf("%s\n", el.StaticText)
-					} else if val, ok := card.Data[el.Field]; ok {
-						cardContent += fmt.Sprintf("%v\n", val)
-					}
-				}
-				// Image support in PDF is tricky with Maroto v2 text cols, skipping for now or needs ImageCol
-			}
-
-			col := text.NewCol(12/cardsPerRow, cardContent, props.Text{
-				Size:  10,
-				Top:   5,
-				Align: align.Left,
-			})
-
-			currentRow = append(currentRow, col)
-
-			if len(currentRow) == cardsPerRow || j == len(pageCards)-1 {
-				// Fill remaining columns if last row
-				for len(currentRow) < cardsPerRow {
-					currentRow = append(currentRow, text.NewCol(12/cardsPerRow, "", props.Text{}))
-				}
-				m.AddRow(rowHeight, currentRow...)
-				currentHeight += rowHeight
-				currentRow = []core.Col{}
+			// Draw cut guides if enabled
+			if d.DrawCutGuides {
+				pdf.SetDrawColor(150, 150, 150)        // Light gray
+				pdf.SetDashPattern([]float64{1, 1}, 0) // Dashed line
+				pdf.Rect(x, y, layout.CardWidth, layout.CardHeight, "D")
+				pdf.SetDashPattern([]float64{}, 0) // Reset dash
 			}
 		}
 
-		// 2. Always do Backs page for double-sided consistency
-		// (Or check if any back style is non-empty?)
-		// For now, let's assume we always want backs if we have fronts.
+		// Render BACKS page (immediately after fronts for duplex)
+		pdf.AddPage()
 
-		// Force Page Break
-		spacer := printableHeight - currentHeight - 1 // -1 for safety
-		if spacer > 0 {
-			m.AddRow(spacer, text.NewCol(12, " ", props.Text{}))
-		}
+		for j := 0; j < len(pageCards); j++ {
+			row := j / layout.CardsPerRow
+			col := j % layout.CardsPerRow
 
-		// Render Backs
-		currentHeight = 0.0 // New page
+			// Mirror columns for standard duplex printing (Back of Left is Right)
+			mirroredCol := layout.CardsPerRow - 1 - col
 
-		for r := 0; r < rowsInBatch; r++ {
-			startIdx := r * cardsPerRow
-			endIdx := startIdx + cardsPerRow
-			if endIdx > len(pageCards) {
-				endIdx = len(pageCards)
+			x := layout.MarginLeft + float64(mirroredCol)*(layout.CardWidth+layout.Spacing)
+			y := layout.MarginTop + float64(row)*(layout.CardHeight+layout.Spacing)
+
+			card := pageCards[j]
+
+			// Get card image
+			styleID := card.BackStyleID
+			if styleID == "" {
+				styleID = "default-back"
 			}
 
-			rowCards := pageCards[startIdx:endIdx]
-
-			var backCols []core.Col
-
-			// Reverse for mirroring
-			for k := len(rowCards) - 1; k >= 0; k-- {
-				card := rowCards[k]
-
-				styleID := card.BackStyleID
-				if styleID == "" {
-					styleID = "default-back"
-				}
-				layout, ok := d.BackStyles[styleID]
-				if !ok {
-					layout = deck.CardLayout{Elements: []deck.LayoutElement{}}
-				}
-
-				backContent := ""
-				for _, el := range layout.Elements {
-					if el.Type == "text" {
-						if el.StaticText != "" {
-							backContent += fmt.Sprintf("%s\n", el.StaticText)
-						} else if val, ok := card.Data[el.Field]; ok {
-							backContent += fmt.Sprintf("%v\n", val)
-						}
-					}
-				}
-
-				col := text.NewCol(12/cardsPerRow, backContent, props.Text{
-					Size:  10,
-					Top:   5,
-					Align: align.Center,
-					Style: fontstyle.Italic,
-				})
-				backCols = append(backCols, col)
+			key := fmt.Sprintf("%s-back", styleID)
+			if imageName, ok := imageMap[key]; ok {
+				pdf.Image(imageName, x, y, layout.CardWidth, layout.CardHeight, false, "", 0, "")
+			} else {
+				// Fallback: draw a border if image not found
+				pdf.SetDrawColor(200, 200, 200)
+				pdf.Rect(x, y, layout.CardWidth, layout.CardHeight, "D")
 			}
 
-			// Pad
-			for len(backCols) < cardsPerRow {
-				backCols = append([]core.Col{text.NewCol(12/cardsPerRow, "", props.Text{})}, backCols...)
-			}
-
-			m.AddRow(rowHeight, backCols...)
-			currentHeight += rowHeight
-		}
-
-		// If there are more cards coming, we need to finish this Backs page too
-		if end < len(expandedCards) {
-			spacer := printableHeight - currentHeight - 1
-			if spacer > 0 {
-				m.AddRow(spacer, text.NewCol(12, " ", props.Text{}))
+			// Draw cut guides if enabled
+			if d.DrawCutGuides {
+				pdf.SetDrawColor(150, 150, 150)        // Light gray
+				pdf.SetDashPattern([]float64{1, 1}, 0) // Dashed line
+				pdf.Rect(x, y, layout.CardWidth, layout.CardHeight, "D")
+				pdf.SetDashPattern([]float64{}, 0) // Reset dash
 			}
 		}
 	}
 
-	document, err := m.Generate()
-	if err != nil {
-		return err
-	}
-
-	return document.Save(outputPath)
+	return pdf.OutputFileAndClose(outputPath)
 }

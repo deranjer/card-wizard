@@ -31,7 +31,7 @@ export function DeckPreview({ deck, onNavigateToHelp }: DeckPreviewProps) {
 
   const renderCard = (card: any, mode: 'front' | 'back', scale: number, border: boolean = true) => {
     const layout = getCardStyle(card, mode);
-    
+
     return (
     <div
       style={{
@@ -66,13 +66,13 @@ export function DeckPreview({ deck, onNavigateToHelp }: DeckPreviewProps) {
         >
             {el.type === 'image' ? (
                  el.field && card.data[el.field] ? (
-                    <ImageLoader 
-                        path={card.data[el.field]} 
-                        style={{ 
-                            width: '100%', 
-                            height: '100%', 
-                            objectFit: (el.objectFit as any) || 'contain' 
-                        }} 
+                    <ImageLoader
+                        path={card.data[el.field]}
+                        style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: (el.objectFit as any) || 'contain'
+                        }}
                     />
                  ) : null
             ) : (
@@ -108,9 +108,9 @@ export function DeckPreview({ deck, onNavigateToHelp }: DeckPreviewProps) {
           <Group>
             <Title order={3}>Preview</Title>
             {onNavigateToHelp && (
-              <ActionIcon 
-                variant="subtle" 
-                color="blue" 
+              <ActionIcon
+                variant="subtle"
+                color="blue"
                 onClick={() => onNavigateToHelp('preview')}
                 title="Help for this tab"
               >
@@ -118,7 +118,7 @@ export function DeckPreview({ deck, onNavigateToHelp }: DeckPreviewProps) {
               </ActionIcon>
             )}
           </Group>
-          <SegmentedControl 
+          <SegmentedControl
               value={previewMode}
               onChange={(val) => setPreviewMode(val as 'front' | 'back')}
               data={[{ label: 'Fronts', value: 'front' }, { label: 'Backs', value: 'back' }]}
@@ -134,22 +134,22 @@ export function DeckPreview({ deck, onNavigateToHelp }: DeckPreviewProps) {
         </SimpleGrid>
       </Stack>
 
-      <Modal 
-        opened={opened} 
-        onClose={() => setOpened(false)} 
+      <Modal
+        opened={opened}
+        onClose={() => setOpened(false)}
         size="100%"
         padding={0}
         withCloseButton={false}
-        styles={{ 
+        styles={{
             body: { height: '100vh', display: 'flex', flexDirection: 'column' },
-            content: { height: '100vh' } 
+            content: { height: '100vh' }
         }}
       >
         {/* Toolbar */}
         <Group justify="space-between" p="md" style={{ borderBottom: '1px solid #eee' }}>
             <Group>
                 <Text fw={700}>{selectedCardIndex !== null ? deck.cards[selectedCardIndex].id : ''}</Text>
-                <SegmentedControl 
+                <SegmentedControl
                     value={previewMode}
                     onChange={(val) => setPreviewMode(val as 'front' | 'back')}
                     data={[{ label: 'Front', value: 'front' }, { label: 'Back', value: 'back' }]}
@@ -157,13 +157,13 @@ export function DeckPreview({ deck, onNavigateToHelp }: DeckPreviewProps) {
             </Group>
             <Group>
                 <IconZoomOut onClick={() => setZoom(Math.max(0.5, zoom - 0.1))} style={{ cursor: 'pointer' }} />
-                <Slider 
-                    value={zoom} 
-                    onChange={setZoom} 
-                    min={0.5} 
-                    max={3} 
-                    step={0.1} 
-                    w={200} 
+                <Slider
+                    value={zoom}
+                    onChange={setZoom}
+                    min={0.5}
+                    max={3}
+                    step={0.1}
+                    w={200}
                     label={(val) => `${Math.round(val * 100)}%`}
                 />
                 <IconZoomIn onClick={() => setZoom(Math.min(3, zoom + 0.1))} style={{ cursor: 'pointer' }} />
@@ -177,25 +177,25 @@ export function DeckPreview({ deck, onNavigateToHelp }: DeckPreviewProps) {
         <div style={{ flex: 1, backgroundColor: '#f8f9fa', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
             {selectedCardIndex !== null && (
                 <>
-                    <ActionIcon 
-                        variant="filled" 
-                        radius="xl" 
-                        size="xl" 
+                    <ActionIcon
+                        variant="filled"
+                        radius="xl"
+                        size="xl"
                         style={{ position: 'absolute', left: 20, zIndex: 10 }}
                         onClick={(e) => { e.stopPropagation(); prevCard(); }}
                         disabled={selectedCardIndex === 0}
                     >
                         <IconChevronLeft />
                     </ActionIcon>
-                    
+
                     <div style={{ transform: `scale(${zoom})`, transition: 'transform 0.2s' }}>
                         {renderCard(deck.cards[selectedCardIndex], previewMode, 3, false)}
                     </div>
 
-                    <ActionIcon 
-                        variant="filled" 
-                        radius="xl" 
-                        size="xl" 
+                    <ActionIcon
+                        variant="filled"
+                        radius="xl"
+                        size="xl"
                         style={{ position: 'absolute', right: 20, zIndex: 10 }}
                         onClick={(e) => { e.stopPropagation(); nextCard(); }}
                         disabled={selectedCardIndex === deck.cards.length - 1}

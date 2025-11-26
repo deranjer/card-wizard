@@ -1,9 +1,9 @@
-import { Container, Title, TextInput, NumberInput, Group, Button, Stack, Paper, Text, Select, Tabs, ActionIcon, Modal, Anchor } from '@mantine/core';
+import { Container, Title, TextInput, NumberInput, Group, Button, Stack, Paper, Text, Select, Tabs, ActionIcon, Modal, Anchor, Menu, Switch } from '@mantine/core';
 import { Deck } from '../types';
 import { ImportXLSX, ExportXLSX, SaveDeck, LoadDeck, SelectFontFile } from '../../wailsjs/go/main/App';
 import { notifications } from '@mantine/notifications';
 import { SpreadsheetView } from './SpreadsheetView';
-import { IconTable, IconSettings, IconPlus, IconTrash, IconDownload, IconHelp } from '@tabler/icons-react';
+import { IconTable, IconSettings, IconPlus, IconTrash, IconDownload, IconHelp, IconEye } from '@tabler/icons-react';
 import { useState } from 'react';
 
 interface DeckDetailsProps {
@@ -25,6 +25,8 @@ const CARD_PRESETS = [
 export function DeckDetails({ deck, setDeck, onDeckLoad, onNavigateToHelp }: DeckDetailsProps) {
   const [clearModalOpened, setClearModalOpened] = useState(false);
   const [clearConfirmText, setClearConfirmText] = useState('');
+  const [fullWidth, setFullWidth] = useState(true);
+  const [compactMode, setCompactMode] = useState(false);
 
   const handleImport = async () => {
     try {
@@ -74,7 +76,7 @@ export function DeckDetails({ deck, setDeck, onDeckLoad, onNavigateToHelp }: Dec
         // Ensure styles exist (migration)
         const frontStyles = loadedDeck.frontStyles || { 'default-front': { name: 'Default Front', elements: [] } };
         const backStyles = loadedDeck.backStyles || { 'default-back': { name: 'Default Back', elements: [] } };
-        
+
         setDeck({ ...loadedDeck, fields, frontStyles, backStyles } as any);
         onDeckLoad?.();
         notifications.show({ title: 'Success', message: 'Deck loaded' });
@@ -102,10 +104,10 @@ export function DeckDetails({ deck, setDeck, onDeckLoad, onNavigateToHelp }: Dec
           const filename = path.split(/[\\/]/).pop() || 'Custom Font';
           const name = filename.split('.')[0];
           const family = `font-${Date.now()}`; // Unique family name to avoid collisions
-          
+
           const newFont = { name, path, family };
           const currentFonts = deck.customFonts || [];
-          
+
           setDeck({
               ...deck,
               customFonts: [...currentFonts, newFont]
@@ -153,16 +155,16 @@ export function DeckDetails({ deck, setDeck, onDeckLoad, onNavigateToHelp }: Dec
   };
 
   return (
-    <Container size="xl">
+    <Container size="xl" fluid={fullWidth}>
       <Paper p="md" withBorder>
         <Stack gap="md">
           <Group justify="space-between">
              <Group>
                <Title order={2}>Deck Manager</Title>
                {onNavigateToHelp && (
-                 <ActionIcon 
-                   variant="subtle" 
-                   color="blue" 
+                 <ActionIcon
+                   variant="subtle"
+                   color="blue"
                    onClick={() => onNavigateToHelp('deck-details')}
                    title="Help for this tab"
                  >
@@ -171,6 +173,26 @@ export function DeckDetails({ deck, setDeck, onDeckLoad, onNavigateToHelp }: Dec
                )}
              </Group>
              <Group>
+                 <Menu shadow="md" width={200}>
+                    <Menu.Target>
+                        <Button variant="light" leftSection={<IconEye size={16} />}>View Options</Button>
+                    </Menu.Target>
+                    <Menu.Dropdown>
+                        <Menu.Label>Layout</Menu.Label>
+                        <Menu.Item
+                            closeMenuOnClick={false}
+                            rightSection={<Switch size="xs" checked={fullWidth} onChange={(e) => setFullWidth(e.currentTarget.checked)} />}
+                        >
+                            Full Width
+                        </Menu.Item>
+                        <Menu.Item
+                            closeMenuOnClick={false}
+                            rightSection={<Switch size="xs" checked={compactMode} onChange={(e) => setCompactMode(e.currentTarget.checked)} />}
+                        >
+                            Compact Mode
+                        </Menu.Item>
+                    </Menu.Dropdown>
+                 </Menu>
                  <Button variant="outline" onClick={handleImport}>Import XLSX</Button>
                  <Button variant="outline" onClick={handleExport}>Export XLSX</Button>
                  <Button variant="outline" onClick={handleLoad}>Load Deck</Button>
@@ -190,7 +212,7 @@ export function DeckDetails({ deck, setDeck, onDeckLoad, onNavigateToHelp }: Dec
             </Tabs.List>
 
             <Tabs.Panel value="spreadsheet" pt="xs">
-              <SpreadsheetView deck={deck} setDeck={setDeck} />
+              <SpreadsheetView deck={deck} setDeck={setDeck} compact={compactMode} />
             </Tabs.Panel>
 
             <Tabs.Panel value="settings" pt="xs">
@@ -223,7 +245,7 @@ export function DeckDetails({ deck, setDeck, onDeckLoad, onNavigateToHelp }: Dec
                       description={`${mmToInches(deck.height)}"`}
                     />
                   </Group>
-                  
+
                   <Select
                     label="Paper Size"
                     description="Paper size for PDF generation"
@@ -234,7 +256,7 @@ export function DeckDetails({ deck, setDeck, onDeckLoad, onNavigateToHelp }: Dec
                       { value: 'a4', label: 'A4 (210mm × 297mm)' },
                     ]}
                   />
-                  
+
                   <Text size="sm" c="dimmed">
                     Current Card Count: {deck.cards.length}
                   </Text>
