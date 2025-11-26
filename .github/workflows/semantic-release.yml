@@ -24,9 +24,9 @@ jobs:
         uses: go-semantic-release/action@v1
         id: semantic
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          allow_initial_development_versions: true
-          force_generator: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          allow-initial-development-versions: true
+          force-generator: true
 
   build-and-upload:
     name: Build ${{ matrix.platform }}
