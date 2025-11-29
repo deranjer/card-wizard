@@ -1,15 +1,15 @@
 export namespace cards {
-	
+
 	export class Card {
 	    id: string;
 	    name: string;
 	    description: string;
 	    copies: number;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new Card(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -22,18 +22,18 @@ export namespace cards {
 }
 
 export namespace deck {
-	
+
 	export class Card {
 	    id: string;
 	    data: Record<string, any>;
 	    count: number;
 	    frontStyleId: string;
 	    backStyleId: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new Card(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -56,11 +56,16 @@ export namespace deck {
 	    color?: string;
 	    fontFamily?: string;
 	    objectFit?: string;
-	
+	    textAlign?: string;
+	    verticalAlign?: string;
+	    fontWeight?: string;
+	    fontStyle?: string;
+	    textDecoration?: string;
+
 	    static createFrom(source: any = {}) {
 	        return new LayoutElement(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -75,22 +80,27 @@ export namespace deck {
 	        this.color = source["color"];
 	        this.fontFamily = source["fontFamily"];
 	        this.objectFit = source["objectFit"];
+	        this.textAlign = source["textAlign"];
+	        this.verticalAlign = source["verticalAlign"];
+	        this.fontWeight = source["fontWeight"];
+	        this.fontStyle = source["fontStyle"];
+	        this.textDecoration = source["textDecoration"];
 	    }
 	}
 	export class CardLayout {
 	    name: string;
 	    elements: LayoutElement[];
-	
+
 	    static createFrom(source: any = {}) {
 	        return new CardLayout(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.elements = this.convertValues(source["elements"], LayoutElement);
 	    }
-	
+
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -113,11 +123,11 @@ export namespace deck {
 	    styleId: string;
 	    side: string;
 	    image: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new RenderedCard(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.styleId = source["styleId"];
@@ -128,11 +138,11 @@ export namespace deck {
 	export class FieldDefinition {
 	    name: string;
 	    type: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new FieldDefinition(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -140,6 +150,7 @@ export namespace deck {
 	    }
 	}
 	export class Deck {
+	    id: string;
 	    name: string;
 	    width: number;
 	    height: number;
@@ -150,13 +161,14 @@ export namespace deck {
 	    paperSize: string;
 	    drawCutGuides: boolean;
 	    renderedCards: RenderedCard[];
-	
+
 	    static createFrom(source: any = {}) {
 	        return new Deck(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.width = source["width"];
 	        this.height = source["height"];
@@ -168,7 +180,7 @@ export namespace deck {
 	        this.drawCutGuides = source["drawCutGuides"];
 	        this.renderedCards = this.convertValues(source["renderedCards"], RenderedCard);
 	    }
-	
+
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -187,8 +199,8 @@ export namespace deck {
 		    return a;
 		}
 	}
-	
-	
+
+
 	export class PDFLayout {
 	    pageWidth: number;
 	    pageHeight: number;
@@ -199,11 +211,11 @@ export namespace deck {
 	    spacing: number;
 	    marginLeft: number;
 	    marginTop: number;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new PDFLayout(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.pageWidth = source["pageWidth"];
@@ -220,3 +232,39 @@ export namespace deck {
 
 }
 
+export namespace game {
+
+	export class Game {
+	    name: string;
+	    decks: deck.Deck[];
+
+	    static createFrom(source: any = {}) {
+	        return new Game(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.decks = this.convertValues(source["decks"], deck.Deck);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}

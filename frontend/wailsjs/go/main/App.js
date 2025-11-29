@@ -22,8 +22,8 @@ export function ImportXLSX() {
   return window['go']['main']['App']['ImportXLSX']();
 }
 
-export function LoadDeck() {
-  return window['go']['main']['App']['LoadDeck']();
+export function LoadGame() {
+  return window['go']['main']['App']['LoadGame']();
 }
 
 export function LoadImageAsDataURL(arg1) {
@@ -34,8 +34,8 @@ export function SampleDeck() {
   return window['go']['main']['App']['SampleDeck']();
 }
 
-export function SaveDeck(arg1) {
-  return window['go']['main']['App']['SaveDeck'](arg1);
+export function SaveGame(arg1) {
+  return window['go']['main']['App']['SaveGame'](arg1);
 }
 
 export function SelectFontFile() {

@@ -31,6 +31,11 @@ export interface LayoutElement {
     color?: string;
     objectFit?: 'contain' | 'cover' | 'fill';
     fontFamily?: string;
+    textAlign?: 'left' | 'center' | 'right';
+    verticalAlign?: 'top' | 'middle' | 'bottom';
+    fontWeight?: 'normal' | 'bold';
+    fontStyle?: 'normal' | 'italic';
+    textDecoration?: 'none' | 'underline';
 }
 
 export interface CardLayout {
@@ -51,6 +56,7 @@ export interface RenderedCard {
 }
 
 export interface Deck {
+    id: string;
     name: string;
     width: number;
     height: number;
@@ -81,7 +87,13 @@ export const DEFAULT_LAYOUT: CardLayout = {
     elements: [],
 };
 
+export interface Game {
+    name: string;
+    decks: Deck[];
+}
+
 export const DEFAULT_DECK: Deck = {
+    id: 'deck-1',
     name: 'New Deck',
     width: 63.5, // Standard Poker size in mm
     height: 88.9,

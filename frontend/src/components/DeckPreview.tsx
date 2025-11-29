@@ -1,8 +1,8 @@
-import { Container, SimpleGrid, Card, Image, Text, Modal, Group, Slider, Stack, Button, SegmentedControl, ActionIcon, Title } from '@mantine/core';
-import { Deck, CardLayout } from '../types';
+import { SimpleGrid, Text, Modal, Group, Slider, Stack, SegmentedControl, ActionIcon, Title } from '@mantine/core';
+import { Deck } from '../types';
 import { useState } from 'react';
+import { CardRender } from './CardRender';
 import { IconZoomIn, IconZoomOut, IconX, IconChevronLeft, IconChevronRight, IconHelp } from '@tabler/icons-react';
-import { ImageLoader } from './ImageLoader';
 
 interface DeckPreviewProps {
   deck: Deck;
@@ -14,74 +14,6 @@ export function DeckPreview({ deck, onNavigateToHelp }: DeckPreviewProps) {
   const [selectedCardIndex, setSelectedCardIndex] = useState<number | null>(null);
   const [zoom, setZoom] = useState(1);
   const [previewMode, setPreviewMode] = useState<'front' | 'back'>('front');
-
-  const getCardStyle = (card: any, mode: 'front' | 'back') => {
-      const styleId = mode === 'front' ? card.frontStyleId : card.backStyleId;
-      const styles = mode === 'front' ? deck.frontStyles : deck.backStyles;
-      return styles[styleId] || { elements: [] };
-  };
-
-  const getImageSrc = (path: string) => {
-    if (!path) return '';
-    if (path.startsWith('http') || path.startsWith('data:')) return path;
-    return `/local-image?path=${encodeURIComponent(path)}`;
-  };
-
-  const MM_TO_PX = 3.7795275591;
-
-  const renderCard = (card: any, mode: 'front' | 'back', scale: number, border: boolean = true) => {
-    const layout = getCardStyle(card, mode);
-
-    return (
-    <div
-      style={{
-        width: deck.width * MM_TO_PX * scale,
-        height: deck.height * MM_TO_PX * scale,
-        border: border ? '1px solid #ccc' : 'none',
-        borderRadius: 8 * scale,
-        backgroundColor: 'white',
-        position: 'relative',
-        overflow: 'hidden',
-        boxShadow: border ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
-      }}
-    >
-      {layout.elements.map((el) => (
-        <div
-          key={el.id}
-          style={{
-            position: 'absolute',
-            left: el.x * MM_TO_PX * scale,
-            top: el.y * MM_TO_PX * scale,
-            width: el.width * MM_TO_PX * scale,
-            height: el.height * MM_TO_PX * scale,
-            fontSize: (el.fontSize || 12) * scale,
-            color: el.color || '#000000',
-            fontFamily: el.fontFamily || 'Arial, sans-serif',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center', // Default center for static text
-            whiteSpace: 'pre-wrap',
-            overflow: 'hidden',
-          }}
-        >
-            {el.type === 'image' ? (
-                 el.field && card.data[el.field] ? (
-                    <ImageLoader
-                        path={card.data[el.field]}
-                        style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: (el.objectFit as any) || 'contain'
-                        }}
-                    />
-                 ) : null
-            ) : (
-                el.field ? card.data[el.field] : el.staticText
-            )}
-        </div>
-      ))}
-    </div>
-  )};
 
   const handleCardClick = (index: number) => {
     setSelectedCardIndex(index);
@@ -127,7 +59,7 @@ export function DeckPreview({ deck, onNavigateToHelp }: DeckPreviewProps) {
         <SimpleGrid cols={{ base: 2, sm: 3, md: 4, lg: 5 }} spacing="md">
             {deck.cards.map((card, index) => (
             <div key={card.id} onClick={() => handleCardClick(index)} style={{ cursor: 'pointer' }}>
-                {renderCard(card, previewMode, 1)}
+                <CardRender card={card} deck={deck} mode={previewMode} scale={1} />
                 <Text size="xs" ta="center" mt={4} c="dimmed">{card.id} (x{card.count || 1})</Text>
             </div>
             ))}
@@ -189,7 +121,13 @@ export function DeckPreview({ deck, onNavigateToHelp }: DeckPreviewProps) {
                     </ActionIcon>
 
                     <div style={{ transform: `scale(${zoom})`, transition: 'transform 0.2s' }}>
-                        {renderCard(deck.cards[selectedCardIndex], previewMode, 3, false)}
+                        <CardRender
+                            card={deck.cards[selectedCardIndex]}
+                            deck={deck}
+                            mode={previewMode}
+                            scale={3}
+                            border={false}
+                        />
                     </div>
 
                     <ActionIcon

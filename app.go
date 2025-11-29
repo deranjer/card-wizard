@@ -14,6 +14,7 @@ import (
 
 	"card_wizard/internal/cards"
 	"card_wizard/internal/deck"
+	"card_wizard/internal/game"
 	"card_wizard/internal/pdf"
 )
 
@@ -21,7 +22,7 @@ import (
 type App struct {
 	ctx             context.Context
 	cardsSvc        *cards.Service
-	currentDeckPath string // Path to the currently loaded/saved deck file
+	currentGamePath string // Path to the currently loaded/saved game file
 }
 
 // NewApp creates a new App application struct
@@ -159,14 +160,14 @@ func (a *App) ExportXLSX(cards []deck.Card, fields []deck.FieldDefinition) error
 	return nil
 }
 
-// SaveDeck saves the current deck to a JSON file
-func (a *App) SaveDeck(d deck.Deck) error {
+// SaveGame saves the current game to a JSON file
+func (a *App) SaveGame(g game.Game) error {
 	selection, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
-		Title: "Save Deck",
+		Title: "Save Game",
 		Filters: []runtime.FileFilter{
 			{DisplayName: "JSON Files", Pattern: "*.json"},
 		},
-		DefaultFilename: "deck.json",
+		DefaultFilename: "game.json",
 	})
 	if err != nil {
 		return err
@@ -175,14 +176,16 @@ func (a *App) SaveDeck(d deck.Deck) error {
 		return nil // User cancelled
 	}
 
-	// Store the deck path for relative path resolution
-	a.currentDeckPath = selection
+	// Store the game path for relative path resolution
+	a.currentGamePath = selection
 
 	// Convert absolute image paths to relative paths before saving
-	deckDir := filepath.Dir(selection)
-	d = a.convertPathsToRelative(d, deckDir)
+	gameDir := filepath.Dir(selection)
+	for i := range g.Decks {
+		g.Decks[i] = a.convertPathsToRelative(g.Decks[i], gameDir)
+	}
 
-	data, err := json.MarshalIndent(d, "", "  ")
+	data, err := json.MarshalIndent(g, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -190,10 +193,10 @@ func (a *App) SaveDeck(d deck.Deck) error {
 	return os.WriteFile(selection, data, 0644)
 }
 
-// LoadDeck loads a deck from a JSON file
-func (a *App) LoadDeck() (*deck.Deck, error) {
+// LoadGame loads a game from a JSON file
+func (a *App) LoadGame() (*game.Game, error) {
 	selection, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "Load Deck",
+		Title: "Load Game",
 		Filters: []runtime.FileFilter{
 			{DisplayName: "JSON Files", Pattern: "*.json"},
 		},
@@ -205,21 +208,41 @@ func (a *App) LoadDeck() (*deck.Deck, error) {
 		return nil, nil // User cancelled
 	}
 
-	// Store the deck path for relative path resolution
-	a.currentDeckPath = selection
+	// Store the game path for relative path resolution
+	a.currentGamePath = selection
 
 	data, err := os.ReadFile(selection)
 	if err != nil {
 		return nil, err
 	}
 
-	var d deck.Deck
-	if err := json.Unmarshal(data, &d); err != nil {
-		return nil, err
+	var g game.Game
+	if err := json.Unmarshal(data, &g); err != nil {
+		// Fallback: Try to load as a single Deck and wrap it in a Game
+		var d deck.Deck
+		if err2 := json.Unmarshal(data, &d); err2 == nil {
+			// It's a deck!
+			if d.ID == "" {
+				d.ID = "deck-1" // Assign a default ID
+			}
+			g = game.Game{
+				Name:  d.Name,
+				Decks: []deck.Deck{d},
+			}
+		} else {
+			return nil, err // Return original error
+		}
 	}
 
-	return &d, nil
+	return &g, nil
 }
+
+// SaveDeck is deprecated, but kept for compatibility if needed, or removed.
+// We will remove it to force usage of SaveGame.
+// func (a *App) SaveDeck(d deck.Deck) error { ... }
+
+// LoadDeck is deprecated.
+// func (a *App) LoadDeck() (*deck.Deck, error) { ... }
 
 // GeneratePDF generates a PDF for the deck
 func (a *App) GeneratePDF(d deck.Deck) error {
@@ -289,14 +312,14 @@ func (a *App) resolveImagePath(path string) string {
 		return path
 	}
 
-	// If no deck is loaded, return path as-is (will likely fail, but that's expected)
-	if a.currentDeckPath == "" {
+	// If no game is loaded, return path as-is (will likely fail, but that's expected)
+	if a.currentGamePath == "" {
 		return path
 	}
 
-	// Resolve relative to deck directory
-	deckDir := filepath.Dir(a.currentDeckPath)
-	return filepath.Join(deckDir, path)
+	// Resolve relative to game directory
+	gameDir := filepath.Dir(a.currentGamePath)
+	return filepath.Join(gameDir, path)
 }
 
 // convertPathsToRelative converts all absolute image paths in a deck to relative paths

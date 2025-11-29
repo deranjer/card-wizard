@@ -32,12 +32,16 @@ export function Help({ section }: HelpProps) {
             <div>
               <Title order={3} size="h4">Getting Started</Title>
               <Text>
-                The Deck Details tab is where you manage your deck's basic information and card data.
+                Card Wizard organizes your work into <strong>Games</strong>. A Game can contain multiple <strong>Decks</strong> (e.g., a Poker deck, a Mini deck, etc.).
+                The Deck Details tab is where you manage the currently selected deck's information and card data.
               </Text>
             </div>
 
             <div>
               <Title order={4} size="h5">Import/Export Cards</Title>
+              <Text mb="xs">
+                  Use the <strong>Data</strong> dropdown menu to import or export data for the active deck.
+              </Text>
               <List>
                 <List.Item>
                   <strong>Import XLSX:</strong> Import card data from an Excel spreadsheet. The first row should contain column headers, and each subsequent row represents a card.
@@ -52,16 +56,31 @@ export function Help({ section }: HelpProps) {
             </div>
 
             <div>
-              <Title order={4} size="h5">Save/Load Deck</Title>
+              <Title order={4} size="h5">Save/Load Game</Title>
               <List>
                 <List.Item>
-                  <strong>Save Deck:</strong> Save your entire deck (cards, settings, styles, and fonts) to a JSON file.
+                  <strong>Save Game:</strong> Save your entire game (all decks, settings, styles, and fonts) to a JSON file.
                 </List.Item>
                 <List.Item>
-                  <strong>Load Deck:</strong> Load a previously saved deck file.
+                  <strong>Load Game:</strong> Load a previously saved game file.
+                </List.Item>
+              </List>
+            </div>
+
+            <div>
+              <Title order={4} size="h5">Deck Management</Title>
+              <Text mb="xs">
+                  Use the sidebar to manage multiple decks within your game:
+              </Text>
+              <List>
+                <List.Item>
+                  <strong>Add Deck:</strong> Click the <strong>+</strong> icon to create a new deck.
                 </List.Item>
                 <List.Item>
-                  <strong>Clear Deck:</strong> Reset the deck to default settings. Type "CLEAR" to confirm this destructive action.
+                  <strong>Switch Decks:</strong> Click on a deck name in the sidebar to switch to it.
+                </List.Item>
+                <List.Item>
+                  <strong>Delete Deck:</strong> Click the trash icon next to a deck name to remove it (you cannot delete the last deck).
                 </List.Item>
               </List>
             </div>

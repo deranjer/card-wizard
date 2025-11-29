@@ -1,8 +1,9 @@
-import { Stack, Group, Button, Text, Paper, Select, ColorInput, NumberInput, TextInput, ActionIcon, ScrollArea, SegmentedControl, Center } from '@mantine/core';
+import { Stack, Group, Button, Text, Paper, Select, ColorInput, NumberInput, TextInput, ActionIcon, ScrollArea, SegmentedControl, Center, Switch, Slider } from '@mantine/core';
 import { Deck, CardLayout, LayoutElement } from '../types';
+import { CardRender } from './CardRender';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Rnd } from 'react-rnd';
-import { IconPlus, IconTrash, IconGripVertical } from '@tabler/icons-react';
+import { IconPlus, IconTrash, IconGripVertical, IconBold, IconItalic, IconUnderline, IconAlignLeft, IconAlignCenter, IconAlignRight, IconArrowBarUp, IconArrowBarDown, IconArrowsVertical } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 
@@ -20,6 +21,12 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
   const [zoom, setZoom] = useState(1);
   const [renderKey, setRenderKey] = useState(0);
   const [canvasReady, setCanvasReady] = useState(false);
+
+  // Live Preview State
+  const [previewCardId, setPreviewCardId] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewOpacity, setPreviewOpacity] = useState(0.5);
+
   const observerRef = useRef<ResizeObserver | null>(null);
 
   const setCanvasRef = useCallback((node: HTMLDivElement | null) => {
@@ -242,6 +249,42 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
             </ActionIcon>
         </Group>
 
+        <Paper withBorder p="xs" mt="md">
+            <Text size="sm" fw={500} mb="xs">Live Preview Overlay</Text>
+            <Stack gap="xs">
+                <Select
+                    placeholder="Select Card to Preview"
+                    data={deck.cards.map(c => ({
+                        value: c.id,
+                        label: c.data.name || c.id
+                    }))}
+                    value={previewCardId}
+                    onChange={setPreviewCardId}
+                    searchable
+                    clearable
+                />
+                <Group justify="space-between">
+                    <Text size="sm">Show Overlay</Text>
+                    <Switch
+                        checked={showPreview}
+                        onChange={(e) => setShowPreview(e.currentTarget.checked)}
+                        disabled={!previewCardId}
+                    />
+                </Group>
+                <Stack gap={0}>
+                    <Text size="xs">Opacity: {Math.round(previewOpacity * 100)}%</Text>
+                    <Slider
+                        value={previewOpacity}
+                        onChange={setPreviewOpacity}
+                        min={0}
+                        max={1}
+                        step={0.1}
+                        disabled={!showPreview}
+                    />
+                </Stack>
+            </Stack>
+        </Paper>
+
         <Text fw={500} mt="md">Add Elements</Text>
         <Group>
           <Button size="xs" onClick={() => addElement('text')}>Add Text</Button>
@@ -264,6 +307,14 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
                   label="Static Text"
                   value={selectedElement.staticText || ''}
                   onChange={(e) => updateElement(selectedElement.id, { staticText: e.currentTarget.value })}
+                  styles={{
+                    input: {
+                        fontWeight: selectedElement.fontWeight === 'bold' ? 'bold' : 'normal',
+                        fontStyle: selectedElement.fontStyle === 'italic' ? 'italic' : 'normal',
+                        textDecoration: selectedElement.textDecoration === 'underline' ? 'underline' : 'none',
+                        textAlign: selectedElement.textAlign || 'left',
+                    }
+                  }}
                 />
               )}
               {selectedElement.type === 'text' && (
@@ -295,6 +346,54 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
                     value={selectedElement.color}
                     onChange={(val) => updateElement(selectedElement.id, { color: val })}
                   />
+
+                  <Text size="sm" fw={500} mt="xs">Alignment</Text>
+                  <Group grow>
+                      <SegmentedControl
+                        value={selectedElement.textAlign || 'center'}
+                        onChange={(val) => updateElement(selectedElement.id, { textAlign: val as any })}
+                        data={[
+                            { value: 'left', label: <Center><IconAlignLeft size={16} /></Center> },
+                            { value: 'center', label: <Center><IconAlignCenter size={16} /></Center> },
+                            { value: 'right', label: <Center><IconAlignRight size={16} /></Center> },
+                        ]}
+                      />
+                  </Group>
+
+                  <Text size="sm" fw={500} mt="xs">Vertical Alignment</Text>
+                  <Group grow>
+                      <SegmentedControl
+                        value={selectedElement.verticalAlign || 'center'}
+                        onChange={(val) => updateElement(selectedElement.id, { verticalAlign: val as any })}
+                        data={[
+                            { value: 'top', label: <Center><IconArrowBarUp size={16} /></Center> },
+                            { value: 'middle', label: <Center><IconArrowsVertical size={16} /></Center> },
+                            { value: 'bottom', label: <Center><IconArrowBarDown size={16} /></Center> },
+                        ]}
+                      />
+                  </Group>
+
+                  <Text size="sm" fw={500} mt="xs">Formatting</Text>
+                  <Group>
+                      <ActionIcon
+                        variant={selectedElement.fontWeight === 'bold' ? 'filled' : 'default'}
+                        onClick={() => updateElement(selectedElement.id, { fontWeight: selectedElement.fontWeight === 'bold' ? 'normal' : 'bold' })}
+                      >
+                          <IconBold size={16} />
+                      </ActionIcon>
+                      <ActionIcon
+                        variant={selectedElement.fontStyle === 'italic' ? 'filled' : 'default'}
+                        onClick={() => updateElement(selectedElement.id, { fontStyle: selectedElement.fontStyle === 'italic' ? 'normal' : 'italic' })}
+                      >
+                          <IconItalic size={16} />
+                      </ActionIcon>
+                      <ActionIcon
+                        variant={selectedElement.textDecoration === 'underline' ? 'filled' : 'default'}
+                        onClick={() => updateElement(selectedElement.id, { textDecoration: selectedElement.textDecoration === 'underline' ? 'none' : 'underline' })}
+                      >
+                          <IconUnderline size={16} />
+                      </ActionIcon>
+                  </Group>
                 </>
               )}
               {selectedElement.type === 'image' && (
@@ -331,6 +430,28 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
                 }}
                 onClick={() => setSelectedElementId(null)}
             >
+                {/* Live Preview Overlay */}
+                {canvasReady && showPreview && previewCardId && (
+                    <div style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        zIndex: 500,
+                        opacity: previewOpacity,
+                        pointerEvents: 'none',
+                    }}>
+                        <CardRender
+                            card={deck.cards.find(c => c.id === previewCardId)!}
+                            deck={deck}
+                            mode={activeTab}
+                            scale={scale}
+                            border={false}
+                        />
+                    </div>
+                )}
+
                 {canvasReady && currentStyle.elements.map(el => {
                     const elementWidth = el.width * MM_TO_PX * scale;
                     const elementHeight = el.height * MM_TO_PX * scale;
@@ -375,12 +496,17 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
                             width: '100%',
                             height: '100%',
                             display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
                             overflow: 'hidden',
                             color: el.color,
                             fontSize: (el.fontSize || 12) * scale,
                             fontFamily: el.fontFamily || 'Arial, sans-serif',
+                            fontWeight: el.fontWeight || 'normal',
+                            fontStyle: el.fontStyle || 'normal',
+                            textDecoration: el.textDecoration || 'none',
+                            textAlign: el.textAlign || 'center',
+                            alignItems: el.verticalAlign === 'top' ? 'flex-start' : el.verticalAlign === 'bottom' ? 'flex-end' : 'center',
+                            justifyContent: el.textAlign === 'left' ? 'flex-start' : el.textAlign === 'right' ? 'flex-end' : 'center',
+                            whiteSpace: 'pre-wrap',
                             pointerEvents: 'none',
                         }}>
                             {el.type === 'image' ? (
@@ -433,7 +559,15 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
                                                   <div {...provided.dragHandleProps} style={{ display: 'flex', alignItems: 'center', cursor: 'grab' }}>
                                                       <IconGripVertical size={14} color="#adb5bd" />
                                                   </div>
-                                                  <Text size="sm" fw={600} c="dark.4" truncate style={{ flex: 1 }}>
+                                                  <Text
+                                                    size="sm"
+                                                    fw={el.fontWeight === 'bold' ? 700 : 400}
+                                                    fs={el.fontStyle === 'italic' ? 'italic' : 'normal'}
+                                                    td={el.textDecoration === 'underline' ? 'underline' : 'none'}
+                                                    c="dark.4"
+                                                    truncate
+                                                    style={{ flex: 1, textAlign: el.textAlign || 'left' }}
+                                                  >
                                                       {el.type === 'image' ? 'Image' : (el.staticText || `{${el.field}}`)}
                                                   </Text>
                                                   <ActionIcon color="red" size="sm" variant="subtle" onClick={(e) => { e.stopPropagation(); removeElement(el.id); }}>

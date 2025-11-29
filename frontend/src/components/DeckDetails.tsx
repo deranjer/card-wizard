@@ -1,9 +1,9 @@
 import { Container, Title, TextInput, NumberInput, Group, Button, Stack, Paper, Text, Select, Tabs, ActionIcon, Modal, Anchor, Menu, Switch } from '@mantine/core';
 import { Deck } from '../types';
-import { ImportXLSX, ExportXLSX, SaveDeck, LoadDeck, SelectFontFile } from '../../wailsjs/go/main/App';
+import { ImportXLSX, ExportXLSX, SelectFontFile } from '../../wailsjs/go/main/App';
 import { notifications } from '@mantine/notifications';
 import { SpreadsheetView } from './SpreadsheetView';
-import { IconTable, IconSettings, IconPlus, IconTrash, IconDownload, IconHelp, IconEye } from '@tabler/icons-react';
+import { IconTable, IconSettings, IconPlus, IconTrash, IconHelp, IconEye, IconDatabase } from '@tabler/icons-react';
 import { useState } from 'react';
 
 interface DeckDetailsProps {
@@ -23,8 +23,6 @@ const CARD_PRESETS = [
 ];
 
 export function DeckDetails({ deck, setDeck, onDeckLoad, onNavigateToHelp }: DeckDetailsProps) {
-  const [clearModalOpened, setClearModalOpened] = useState(false);
-  const [clearConfirmText, setClearConfirmText] = useState('');
   const [fullWidth, setFullWidth] = useState(true);
   const [compactMode, setCompactMode] = useState(false);
 
@@ -55,36 +53,7 @@ export function DeckDetails({ deck, setDeck, onDeckLoad, onNavigateToHelp }: Dec
     }
   };
 
-  const handleSave = async () => {
-    try {
-      await SaveDeck(deck as any);
-      notifications.show({ title: 'Success', message: 'Deck saved' });
-    } catch (err) {
-      notifications.show({ title: 'Error', message: String(err), color: 'red' });
-    }
-  };
 
-  const handleLoad = async () => {
-    try {
-      const loadedDeck = await LoadDeck();
-      if (loadedDeck) {
-        // Ensure fields exist for legacy decks
-        let fields = loadedDeck.fields || [];
-        if (fields.length === 0 && loadedDeck.cards.length > 0) {
-             fields = Object.keys(loadedDeck.cards[0].data).map(key => ({ name: key, type: 'text' }));
-        }
-        // Ensure styles exist (migration)
-        const frontStyles = loadedDeck.frontStyles || { 'default-front': { name: 'Default Front', elements: [] } };
-        const backStyles = loadedDeck.backStyles || { 'default-back': { name: 'Default Back', elements: [] } };
-
-        setDeck({ ...loadedDeck, fields, frontStyles, backStyles } as any);
-        onDeckLoad?.();
-        notifications.show({ title: 'Success', message: 'Deck loaded' });
-      }
-    } catch (err) {
-      notifications.show({ title: 'Error', message: String(err), color: 'red' });
-    }
-  };
 
   const handlePresetChange = (value: string | null) => {
     const preset = CARD_PRESETS.find(p => p.value === value);
@@ -124,35 +93,7 @@ export function DeckDetails({ deck, setDeck, onDeckLoad, onNavigateToHelp }: Dec
       setDeck({ ...deck, customFonts: currentFonts });
   };
 
-  const handleClearDeck = () => {
-      setClearModalOpened(true);
-      setClearConfirmText('');
-  };
 
-  const handleConfirmClear = () => {
-    if (clearConfirmText === 'CLEAR') {
-      setDeck({
-        name: 'New Deck',
-        width: 63.5,
-        height: 88.9,
-        cards: [],
-        fields: [],
-        frontStyles: {
-          'default-front': { name: 'Default Front', elements: [] }
-        },
-        backStyles: {
-          'default-back': { name: 'Default Back', elements: [] }
-        },
-        customFonts: deck.customFonts || [], // Preserve custom fonts
-        paperSize: 'letter',
-      });
-      setClearModalOpened(false);
-      setClearConfirmText('');
-      notifications.show({ title: 'Success', message: 'Deck cleared', color: 'green' });
-    } else {
-      notifications.show({ title: 'Error', message: 'Please type CLEAR to confirm', color: 'red' });
-    }
-  };
 
   return (
     <Container size="xl" fluid={fullWidth}>
@@ -193,11 +134,16 @@ export function DeckDetails({ deck, setDeck, onDeckLoad, onNavigateToHelp }: Dec
                         </Menu.Item>
                     </Menu.Dropdown>
                  </Menu>
-                 <Button variant="outline" onClick={handleImport}>Import XLSX</Button>
-                 <Button variant="outline" onClick={handleExport}>Export XLSX</Button>
-                 <Button variant="outline" onClick={handleLoad}>Load Deck</Button>
-                 <Button onClick={handleSave}>Save Deck</Button>
-                 <Button color="red" variant="outline" onClick={handleClearDeck}>Clear Deck</Button>
+                 <Menu shadow="md" width={200}>
+                    <Menu.Target>
+                        <Button variant="outline" leftSection={<IconDatabase size={16} />}>Data</Button>
+                    </Menu.Target>
+                    <Menu.Dropdown>
+                        <Menu.Label>Excel</Menu.Label>
+                        <Menu.Item leftSection={<IconPlus size={14} />} onClick={handleImport}>Import XLSX</Menu.Item>
+                        <Menu.Item leftSection={<IconTable size={14} />} onClick={handleExport}>Export XLSX</Menu.Item>
+                    </Menu.Dropdown>
+                 </Menu>
              </Group>
           </Group>
 
@@ -312,41 +258,7 @@ export function DeckDetails({ deck, setDeck, onDeckLoad, onNavigateToHelp }: Dec
         </Stack>
       </Paper>
 
-      <Modal
-        opened={clearModalOpened}
-        onClose={() => {
-          setClearModalOpened(false);
-          setClearConfirmText('');
-        }}
-        title="Confirm Clear Deck"
-        centered
-      >
-        <Stack>
-          <Text size="sm">
-            This action cannot be undone. All cards, fields, and styles will be permanently deleted.
-          </Text>
-          <Text size="sm" fw={700}>
-            Type <Text span c="red">CLEAR</Text> to confirm:
-          </Text>
-          <TextInput
-            value={clearConfirmText}
-            onChange={(e) => setClearConfirmText(e.currentTarget.value)}
-            placeholder="Type CLEAR"
-            data-autofocus
-          />
-          <Group justify="flex-end">
-            <Button variant="outline" onClick={() => {
-              setClearModalOpened(false);
-              setClearConfirmText('');
-            }}>
-              Cancel
-            </Button>
-            <Button color="red" onClick={handleConfirmClear}>
-              Clear Deck
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
+
     </Container>
   );
 }

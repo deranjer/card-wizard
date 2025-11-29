@@ -1,4 +1,4 @@
-import { Layout } from './components/Layout'
+import { GameView } from './components/GameView'
 import '@mantine/core/styles.css';
 import { MantineProvider } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
@@ -8,7 +8,7 @@ function App() {
     return (
         <MantineProvider>
             <Notifications />
-            <Layout />
+            <GameView />
         </MantineProvider>
     )
 }

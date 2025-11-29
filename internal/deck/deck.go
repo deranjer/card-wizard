@@ -13,18 +13,23 @@ type CardBack struct {
 }
 
 type LayoutElement struct {
-	ID         string  `json:"id"`
-	Type       string  `json:"type"`
-	Field      string  `json:"field"`
-	StaticText string  `json:"staticText,omitempty"`
-	X          float64 `json:"x"`
-	Y          float64 `json:"y"`
-	Width      float64 `json:"width"`
-	Height     float64 `json:"height"`
-	FontSize   float64 `json:"fontSize,omitempty"`
-	Color      string  `json:"color,omitempty"`
-	FontFamily string  `json:"fontFamily,omitempty"`
-	ObjectFit  string  `json:"objectFit,omitempty"`
+	ID             string  `json:"id"`
+	Type           string  `json:"type"`
+	Field          string  `json:"field"`
+	StaticText     string  `json:"staticText,omitempty"`
+	X              float64 `json:"x"`
+	Y              float64 `json:"y"`
+	Width          float64 `json:"width"`
+	Height         float64 `json:"height"`
+	FontSize       float64 `json:"fontSize,omitempty"`
+	Color          string  `json:"color,omitempty"`
+	FontFamily     string  `json:"fontFamily,omitempty"`
+	ObjectFit      string  `json:"objectFit,omitempty"`
+	TextAlign      string  `json:"textAlign,omitempty"`      // "left", "center", "right"
+	VerticalAlign  string  `json:"verticalAlign,omitempty"`  // "top", "middle", "bottom"
+	FontWeight     string  `json:"fontWeight,omitempty"`     // "normal", "bold"
+	FontStyle      string  `json:"fontStyle,omitempty"`      // "normal", "italic"
+	TextDecoration string  `json:"textDecoration,omitempty"` // "none", "underline"
 }
 
 type CardLayout struct {
@@ -41,6 +46,7 @@ type Card struct {
 }
 
 type Deck struct {
+	ID            string                `json:"id"`
 	Name          string                `json:"name"`
 	Width         float64               `json:"width"`
 	Height        float64               `json:"height"`
