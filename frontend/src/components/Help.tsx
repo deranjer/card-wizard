@@ -1,4 +1,6 @@
-import { Container, Title, Text, Stack, Paper, List, Anchor, Code } from '@mantine/core';
+import { Container, Title, Text, Stack, Paper, List, Anchor, Code, Button, Group } from '@mantine/core';
+import { IconCopy, IconRobot } from '@tabler/icons-react';
+import { notifications } from '@mantine/notifications';
 import { useEffect } from 'react';
 
 interface HelpProps {
@@ -379,6 +381,84 @@ export function Help({ section }: HelpProps) {
               </List>
             </div>
           </Stack>
+        </Paper>
+
+        {/* AI Import Guide */}
+        <Paper id="ai-import" withBorder p="md" shadow="sm">
+            <Title order={2} mb="md">AI Import Guide</Title>
+            <Stack gap="md">
+                <div>
+                    <Title order={3} size="h4">Generate Cards with AI</Title>
+                    <Text>
+                        You can use AI tools like ChatGPT or Gemini to convert your spreadsheet data or ideas into a compatible JSON format for Card Wizard.
+                    </Text>
+                </div>
+
+                <div>
+                    <Title order={4} size="h5">Prompt Template</Title>
+                    <Text mb="sm">
+                        Copy the prompt below and paste it into your AI tool, along with your card data.
+                    </Text>
+                    <Paper withBorder p="md" bg="dark.7" style={{ position: 'relative' }}>
+                        <Code block style={{ whiteSpace: 'pre-wrap', color: '#fff' }}>
+{`I have a card game idea / spreadsheet data. Please generate a JSON object representing a deck for the "Card Wizard" application.
+
+The JSON should have the following structure:
+{
+  "name": "My AI Deck",
+  "fields": [
+    { "name": "Name", "type": "text" },
+    { "name": "Description", "type": "text" },
+    { "name": "Cost", "type": "text" }
+  ],
+  "cards": [
+    {
+      "id": "card-1",
+      "count": 1,
+      "frontStyleId": "default-front",
+      "backStyleId": "default-back",
+      "data": {
+        "Name": "Example Card",
+        "Description": "Card description here",
+        "Cost": "1"
+      }
+    }
+  ]
+}
+
+Please generate at least 5 cards based on this theme: [INSERT THEME HERE]`}
+                        </Code>
+                        <Button
+                            leftSection={<IconCopy size={16} />}
+                            size="xs"
+                            variant="light"
+                            style={{ position: 'absolute', top: 10, right: 10 }}
+                            onClick={() => {
+                                const prompt = `I have a card game idea / spreadsheet data. Please generate a JSON object representing a deck for the "Card Wizard" application.\n\nThe JSON should have the following structure:\n{\n  "name": "My AI Deck",\n  "fields": [\n    { "name": "Name", "type": "text" },\n    { "name": "Description", "type": "text" },\n    { "name": "Cost", "type": "text" }\n  ],\n  "cards": [\n    {\n      "id": "card-1",\n      "count": 1,\n      "frontStyleId": "default-front",\n      "backStyleId": "default-back",\n      "data": {\n        "Name": "Example Card",\n        "Description": "Card description here",\n        "Cost": "1"\n      }\n    }\n  ]\n}\n\nPlease generate at least 5 cards based on this theme: [INSERT THEME HERE]`;
+                                navigator.clipboard.writeText(prompt);
+                                notifications.show({ title: 'Copied', message: 'Prompt copied to clipboard' });
+                            }}
+                        >
+                            Copy Prompt
+                        </Button>
+                    </Paper>
+                </div>
+
+                 <div>
+                    <Title order={4} size="h5">How to Use</Title>
+                    <List type="ordered">
+                        <List.Item>Copy the prompt above.</List.Item>
+                        <List.Item>Paste it into an AI chat (ChatGPT, Gemini, Claude).</List.Item>
+                        <List.Item>Replace <strong>[INSERT THEME HERE]</strong> with your game idea (e.g., "Fantasy RPG items", "Space combat ships").</List.Item>
+                        <List.Item>The AI will generate JSON code.</List.Item>
+                        <List.Item>Save that JSON code to a file (e.g., <code>my-deck.json</code>).</List.Item>
+                        <List.Item>Use <strong>Load Game</strong> (for full structure) or convert it to XLSX for import.</List.Item>
+                    </List>
+                    <Text size="sm" c="dimmed" mt="xs">
+                        Note: Direct JSON import for decks is not fully supported yet in the UI, but you can convert the "data" part of the JSON to CSV/XLSX for easier import.
+                    </Text>
+                </div>
+            </Stack>
         </Paper>
       </Stack>
     </Container>

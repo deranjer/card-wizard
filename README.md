@@ -3,12 +3,19 @@
 > [!WARNING]
 > **Alpha Status**: This project is currently in **ALPHA**. Features may change, and bugs are expected. Please report any issues you encounter!
 
+Note: v0.2.0 is a rework of the application. The save format has changed and is not compatible with v0.1.3.
+
 **Card Wizard** is a powerful desktop application designed for game designers and hobbyists to create, manage, and print custom playing cards and game components. It bridges the gap between spreadsheet data and print-ready PDFs, offering a visual design interface and robust export options.
+
+Card Wizard is organized by "games" which are collections of decks. Each deck has its own card styles and card layouts.
 
 ## ✨ Features
 
 - **Spreadsheet Integration**: Import card data directly from Excel (`.xlsx`) files or edit data within the app using the built-in spreadsheet view.
+  (Currently only supports importing, since there are custom field formats that are created on import so exporting and reimporting is not supported)
 - **Visual Style Editor**: Design your card layouts using a drag-and-drop interface. Create unique styles for different card types (e.g., "Unit", "Spell", "Event").
+- **Layer Management**: Organize card elements into layers for easy management and reordering.
+- **Shape Editor**: Create and edit basic shapes for card elements.
 - **Dynamic Rendering**: Map spreadsheet columns to text and image elements on your cards.
 - **Real-time Preview**: See exactly how your deck will look before printing.
 - **Print-Ready PDF Export**: Generate high-quality PDFs with:
@@ -16,7 +23,8 @@
   - Automatic duplex layout (fronts and backs aligned).
   - Cut lines and safe margins.
 - **Custom Fonts**: Load and use your own font files.
-- **Cross-Platform**: Built with Wails, running natively on Windows (Mac/Linux support planned).
+- **Cross-Platform**: Built with Wails, running natively on Windows/Mac/Linux (Only Windows has been tested).
+- **In App Help**: Access help documentation directly from the application.
 
 
 ## 📸 Screenshots

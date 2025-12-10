@@ -63,6 +63,22 @@ export function CardRender({ card, deck, mode, scale = 1, border = true, classNa
                 }}
               />
             ) : null
+          ) : el.type === 'shape' && el.points ? (
+            <svg
+                width="100%"
+                height="100%"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                style={{ overflow: 'visible' }}
+            >
+                <polygon
+                    points={el.points.map(p => `${p.x * 100},${p.y * 100}`).join(' ')}
+                    fill={el.fillColor || '#cccccc'}
+                    stroke={el.strokeColor || 'none'}
+                    strokeWidth={el.strokeWidth || 0}
+                    vectorEffect="non-scaling-stroke"
+                />
+            </svg>
           ) : (
             el.field ? card.data[el.field] : el.staticText
           )}

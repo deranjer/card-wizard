@@ -158,7 +158,9 @@ export function GameView() {
                                     variant="subtle"
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        handleDeleteDeck(deck.id);
+                                        if (window.confirm(`Are you sure you want to delete "${deck.name}"?`)) {
+                                            handleDeleteDeck(deck.id);
+                                        }
                                     }}
                                 >
                                     <IconTrash size={12} />
@@ -184,6 +186,11 @@ export function GameView() {
                             deck={activeDeck}
                             setDeck={updateDeck}
                             onNavigateToHelp={navigateToHelp}
+                            onDeleteDeck={() => {
+                                if (window.confirm('Are you sure you want to delete this deck?')) {
+                                    handleDeleteDeck(activeDeck.id);
+                                }
+                            }}
                         />
                     </Tabs.Panel>
 

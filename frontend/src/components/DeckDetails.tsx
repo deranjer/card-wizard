@@ -11,6 +11,7 @@ interface DeckDetailsProps {
   setDeck: (deck: Deck) => void;
   onDeckLoad?: () => void;
   onNavigateToHelp?: (section: string) => void;
+  onDeleteDeck?: () => void;
 }
 
 const CARD_PRESETS = [
@@ -22,7 +23,7 @@ const CARD_PRESETS = [
   { label: 'Square Playing Cards (3" x 3")', value: 'square', width: 76.2, height: 76.2 },
 ];
 
-export function DeckDetails({ deck, setDeck, onDeckLoad, onNavigateToHelp }: DeckDetailsProps) {
+export function DeckDetails({ deck, setDeck, onDeckLoad, onNavigateToHelp, onDeleteDeck }: DeckDetailsProps) {
   const [fullWidth, setFullWidth] = useState(true);
   const [compactMode, setCompactMode] = useState(false);
 
@@ -231,7 +232,7 @@ export function DeckDetails({ deck, setDeck, onDeckLoad, onNavigateToHelp }: Dec
                       </Stack>
                   </Paper>
 
-                  <Paper withBorder p="sm">
+                   <Paper withBorder p="sm">
                       <Text fw={500} mb="xs">Defined Styles</Text>
                       <Group align="flex-start" grow>
                           <Stack gap="xs">
@@ -252,6 +253,16 @@ export function DeckDetails({ deck, setDeck, onDeckLoad, onNavigateToHelp }: Dec
                           </Stack>
                       </Group>
                   </Paper>
+
+                  {onDeleteDeck && (
+                      <Paper withBorder p="sm" style={{ borderColor: 'red' }}>
+                          <Title order={5} c="red" mb="xs">Danger Zone</Title>
+                          <Text size="sm" mb="md">Once you delete a deck, there is no going back. Please be certain.</Text>
+                          <Button color="red" variant="outline" onClick={onDeleteDeck} leftSection={<IconTrash size={16} />}>
+                              Delete Deck
+                          </Button>
+                      </Paper>
+                  )}
               </Stack>
             </Tabs.Panel>
           </Tabs>

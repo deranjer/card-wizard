@@ -1,477 +1,514 @@
 {
-    "name": "Card Wizard Example Game",
-    "decks": [
+  "name": "Card Wizard Example Game",
+  "decks": [
+    {
+      "id": "weapon-deck",
+      "name": "Weapon Arsenal Deck",
+      "width": 63.5,
+      "height": 88.9,
+      "cards": [
         {
-            "id": "weapon-deck",
-            "name": "Weapon Arsenal Deck",
-            "width": 63.5,
-            "height": 88.9,
-            "cards": [
-                {
-                    "id": "rusty-dagger",
-                    "data": {
-                        "name": "Rusty Dagger",
-                        "cost": "2",
-                        "description": "A weathered blade that's seen better days. Still sharp enough to get the job done.",
-                        "tier": "Bronze",
-                        "image": "images/bronze_weapon_card_back.png"
-                    },
-                    "count": 3,
-                    "frontStyleId": "weapon-front-bronze",
-                    "backStyleId": "weapon-back-bronze"
-                },
-                {
-                    "id": "wooden-club",
-                    "data": {
-                        "name": "Wooden Club",
-                        "cost": "1",
-                        "description": "Simple but effective. What it lacks in finesse, it makes up for in reliability.",
-                        "tier": "Bronze",
-                        "image": "images/bronze_weapon_card_back.png"
-                    },
-                    "count": 3,
-                    "frontStyleId": "weapon-front-bronze",
-                    "backStyleId": "weapon-back-bronze"
-                },
-                {
-                    "id": "hunting-bow",
-                    "data": {
-                        "name": "Hunting Bow",
-                        "cost": "3",
-                        "description": "A basic bow crafted from ash wood. Perfect for beginners learning the art of archery.",
-                        "tier": "Bronze",
-                        "image": "images/bronze_weapon_card_back.png"
-                    },
-                    "count": 3,
-                    "frontStyleId": "weapon-front-bronze",
-                    "backStyleId": "weapon-back-bronze"
-                },
-                {
-                    "id": "steel-sword",
-                    "data": {
-                        "name": "Steel Sword",
-                        "cost": "5",
-                        "description": "Forged by skilled hands, this blade cuts through armor with ease. A warrior's trusted companion.",
-                        "tier": "Silver",
-                        "image": "images/silver_weapon_card_back.png"
-                    },
-                    "count": 3,
-                    "frontStyleId": "weapon-front-silver",
-                    "backStyleId": "weapon-back-silver"
-                },
-                {
-                    "id": "war-hammer",
-                    "data": {
-                        "name": "War Hammer",
-                        "cost": "6",
-                        "description": "Heavy and devastating. One swing can shatter shields and break bones.",
-                        "tier": "Silver",
-                        "image": "images/silver_weapon_card_back.png"
-                    },
-                    "count": 3,
-                    "frontStyleId": "weapon-front-silver",
-                    "backStyleId": "weapon-back-silver"
-                },
-                {
-                    "id": "crossbow",
-                    "data": {
-                        "name": "Crossbow",
-                        "cost": "7",
-                        "description": "Precision engineering meets deadly force. Pierces plate armor from a hundred paces.",
-                        "tier": "Silver",
-                        "image": "images/silver_weapon_card_back.png"
-                    },
-                    "count": 3,
-                    "frontStyleId": "weapon-front-silver",
-                    "backStyleId": "weapon-back-silver"
-                },
-                {
-                    "id": "dragon-slayer",
-                    "data": {
-                        "name": "Dragon Slayer",
-                        "cost": "12",
-                        "description": "Legendary greatsword imbued with ancient magic. Said to have felled the great wyrm Infernus.",
-                        "tier": "Gold",
-                        "image": "images/gold_weapon_card_back.png"
-                    },
-                    "count": 3,
-                    "frontStyleId": "weapon-front-gold",
-                    "backStyleId": "weapon-back-gold"
-                },
-                {
-                    "id": "thunderstrike-axe",
-                    "data": {
-                        "name": "Thunderstrike Axe",
-                        "cost": "10",
-                        "description": "Crackling with elemental fury, each strike calls down lightning from the heavens.",
-                        "tier": "Gold",
-                        "image": "images/gold_weapon_card_back.png"
-                    },
-                    "count": 3,
-                    "frontStyleId": "weapon-front-gold",
-                    "backStyleId": "weapon-back-gold"
-                },
-                {
-                    "id": "phoenix-longbow",
-                    "data": {
-                        "name": "Phoenix Longbow",
-                        "cost": "11",
-                        "description": "Arrows shot from this bow ignite mid-flight, leaving trails of flame in their wake.",
-                        "tier": "Gold",
-                        "image": "images/gold_weapon_card_back.png"
-                    },
-                    "count": 3,
-                    "frontStyleId": "weapon-front-gold",
-                    "backStyleId": "weapon-back-gold"
-                }
-            ],
-            "fields": [
-                {
-                    "name": "name",
-                    "type": "text"
-                },
-                {
-                    "name": "cost",
-                    "type": "text"
-                },
-                {
-                    "name": "description",
-                    "type": "text"
-                },
-                {
-                    "name": "tier",
-                    "type": "text"
-                },
-                {
-                    "name": "image",
-                    "type": "image"
-                }
-            ],
-            "frontStyles": {
-                "weapon-front-bronze": {
-                    "name": "Bronze Weapon Front",
-                    "elements": [
-                        {
-                            "id": "name-bronze",
-                            "type": "text",
-                            "field": "name",
-                            "x": 5,
-                            "y": 5,
-                            "width": 53.5,
-                            "height": 10,
-                            "fontSize": 18,
-                            "color": "#8B4513",
-                            "fontFamily": "Georgia, serif"
-                        },
-                        {
-                            "id": "cost-bronze",
-                            "type": "text",
-                            "field": "cost",
-                            "x": 50,
-                            "y": 17,
-                            "width": 8.5,
-                            "height": 8,
-                            "fontSize": 16,
-                            "color": "#CD7F32",
-                            "fontFamily": "Courier New, monospace"
-                        },
-                        {
-                            "id": "cost-label-bronze",
-                            "type": "text",
-                            "staticText": "💰",
-                            "x": 45,
-                            "y": 17,
-                            "width": 5,
-                            "height": 8,
-                            "fontSize": 14,
-                            "color": "#FFD700"
-                        },
-                        {
-                            "id": "desc-bronze",
-                            "type": "text",
-                            "field": "description",
-                            "x": 5,
-                            "y": 27,
-                            "width": 53.5,
-                            "height": 30,
-                            "fontSize": 11,
-                            "color": "#333333",
-                            "fontFamily": "Verdana, sans-serif"
-                        },
-                        {
-                            "id": "tier-bronze",
-                            "type": "text",
-                            "field": "tier",
-                            "x": 5,
-                            "y": 78,
-                            "width": 20,
-                            "height": 6,
-                            "fontSize": 10,
-                            "color": "#CD7F32",
-                            "fontFamily": "Arial, sans-serif"
-                        }
-                    ]
-                },
-                "weapon-front-silver": {
-                    "name": "Silver Weapon Front",
-                    "elements": [
-                        {
-                            "id": "name-silver",
-                            "type": "text",
-                            "field": "name",
-                            "x": 5,
-                            "y": 5,
-                            "width": 53.5,
-                            "height": 10,
-                            "fontSize": 18,
-                            "color": "#2F4F4F",
-                            "fontFamily": "Times New Roman, serif"
-                        },
-                        {
-                            "id": "cost-silver",
-                            "type": "text",
-                            "field": "cost",
-                            "x": 50,
-                            "y": 17,
-                            "width": 8.5,
-                            "height": 8,
-                            "fontSize": 16,
-                            "color": "#C0C0C0",
-                            "fontFamily": "Georgia, serif"
-                        },
-                        {
-                            "id": "cost-label-silver",
-                            "type": "text",
-                            "staticText": "💰",
-                            "x": 45,
-                            "y": 17,
-                            "width": 5,
-                            "height": 8,
-                            "fontSize": 14,
-                            "color": "#FFD700"
-                        },
-                        {
-                            "id": "desc-silver",
-                            "type": "text",
-                            "field": "description",
-                            "x": 5,
-                            "y": 27,
-                            "width": 53.5,
-                            "height": 30,
-                            "fontSize": 11,
-                            "color": "#1C1C1C",
-                            "fontFamily": "Helvetica, sans-serif"
-                        },
-                        {
-                            "id": "tier-silver",
-                            "type": "text",
-                            "field": "tier",
-                            "x": 5,
-                            "y": 78,
-                            "width": 20,
-                            "height": 6,
-                            "fontSize": 10,
-                            "color": "#C0C0C0",
-                            "fontFamily": "Courier New, monospace"
-                        }
-                    ]
-                },
-                "weapon-front-gold": {
-                    "name": "Gold Weapon Front",
-                    "elements": [
-                        {
-                            "id": "name-gold",
-                            "type": "text",
-                            "field": "name",
-                            "x": 5,
-                            "y": 5,
-                            "width": 53.5,
-                            "height": 10,
-                            "fontSize": 20,
-                            "color": "#8B0000",
-                            "fontFamily": "Verdana, sans-serif"
-                        },
-                        {
-                            "id": "cost-gold",
-                            "type": "text",
-                            "field": "cost",
-                            "x": 50,
-                            "y": 17,
-                            "width": 8.5,
-                            "height": 8,
-                            "fontSize": 18,
-                            "color": "#FFD700",
-                            "fontFamily": "Times New Roman, serif"
-                        },
-                        {
-                            "id": "cost-label-gold",
-                            "type": "text",
-                            "staticText": "💰",
-                            "x": 45,
-                            "y": 17,
-                            "width": 5,
-                            "height": 8,
-                            "fontSize": 14,
-                            "color": "#FFD700"
-                        },
-                        {
-                            "id": "desc-gold",
-                            "type": "text",
-                            "field": "description",
-                            "x": 5,
-                            "y": 27,
-                            "width": 53.5,
-                            "height": 30,
-                            "fontSize": 12,
-                            "color": "#000000",
-                            "fontFamily": "Georgia, serif"
-                        },
-                        {
-                            "id": "tier-gold",
-                            "type": "text",
-                            "field": "tier",
-                            "x": 5,
-                            "y": 78,
-                            "width": 20,
-                            "height": 6,
-                            "fontSize": 11,
-                            "color": "#FFD700",
-                            "fontFamily": "Helvetica, sans-serif"
-                        }
-                    ]
-                }
-            },
-            "backStyles": {
-                "weapon-back-bronze": {
-                    "name": "Bronze Weapon Back",
-                    "elements": [
-                        {
-                            "id": "back-image-bronze",
-                            "type": "image",
-                            "field": "image",
-                            "x": 0,
-                            "y": 0,
-                            "width": 63.5,
-                            "height": 88.9,
-                            "objectFit": "cover"
-                        }
-                    ]
-                },
-                "weapon-back-silver": {
-                    "name": "Silver Weapon Back",
-                    "elements": [
-                        {
-                            "id": "back-image-silver",
-                            "type": "image",
-                            "field": "image",
-                            "x": 0,
-                            "y": 0,
-                            "width": 63.5,
-                            "height": 88.9,
-                            "objectFit": "cover"
-                        }
-                    ]
-                },
-                "weapon-back-gold": {
-                    "name": "Gold Weapon Back",
-                    "elements": [
-                        {
-                            "id": "back-image-gold",
-                            "type": "image",
-                            "field": "image",
-                            "x": 0,
-                            "y": 0,
-                            "width": 63.5,
-                            "height": 88.9,
-                            "objectFit": "cover"
-                        }
-                    ]
-                }
-            },
-            "customFonts": [],
-            "paperSize": "letter",
-            "drawCutGuides": true
+          "id": "rusty-dagger",
+          "data": {
+            "cost": "2",
+            "description": "A weathered blade that's seen better days. Still sharp enough to get the job done.",
+            "image": "images/bronze_weapon_card_back.png",
+            "name": "Rusty Dagger",
+            "tier": "Bronze"
+          },
+          "count": 3,
+          "frontStyleId": "weapon-front-bronze",
+          "backStyleId": "weapon-back-bronze"
         },
         {
-            "id": "cheatsheet-deck",
-            "name": "Cheatsheet",
-            "width": 127,
-            "height": 127,
-            "cards": [
-                {
-                    "id": "rules-card",
-                    "data": {
-                        "title": "Turn Structure",
-                        "content": "Each turn has a Dawn Phase followed by Player Actions.\n\n🌅 Dawn Phase (Start of Each Round)\n\n✋ Hand of God Effect: If any player has a Hand of God building, they swap one tile and rotate another (different tiles)\n\n👁️ Watchtower and Shrine Effect: Watchtower and Shrine Effects occur.\n\n👹 Monster Turn: If the monster is on a tile that is completely blocked, or cannot advance toward a player they will rotate an adjacent tile that gives them the shortest distance to a player. They then skip their movement roll and skip their attack.\n\n🎲 Monster Movement: Roll 1d6 for each monster.\nOn 1-2: no movement.\nOn 3: heal 2 health (can heal past starting life count).\nOn 4-6: monster moves one tile toward the nearest player by connected paths.\nIf multiple players are equidistant, move toward the player who went most recently.\n\n⚔️ Monster Attacks: If a monster is adjacent to a player along a connected path, roll 1d4 for damage to that player\n\n💰 Resource Generation: Players gain resources based on their tile:\n🥉 Bronze tiles: 3 Bronze resources\n🥈 Silver tiles: 2 Silver resources\n🥇 Gold tiles: 1 Gold resource\n⛏️ Mining Drill: Players gain resources from mining drill buildings\n⚖️ Trading Post: Players may trade resources\n\n🪙 First Player Token: First player token is passed to the next player clockwise and they start the player actions phase."
-                    },
-                    "count": 1,
-                    "frontStyleId": "rules-front",
-                    "backStyleId": "rules-back"
-                }
-            ],
-            "fields": [
-                {
-                    "name": "title",
-                    "type": "text"
-                },
-                {
-                    "name": "content",
-                    "type": "text"
-                }
-            ],
-            "frontStyles": {
-                "rules-front": {
-                    "name": "Rules Front",
-                    "elements": [
-                        {
-                            "id": "rules-title",
-                            "type": "text",
-                            "field": "title",
-                            "x": 5,
-                            "y": 5,
-                            "width": 117,
-                            "height": 10,
-                            "fontSize": 24,
-                            "color": "#000000",
-                            "fontFamily": "Arial, sans-serif"
-                        },
-                        {
-                            "id": "rules-content",
-                            "type": "text",
-                            "field": "content",
-                            "x": 5,
-                            "y": 20,
-                            "width": 117,
-                            "height": 102,
-                            "fontSize": 10,
-                            "color": "#333333",
-                            "fontFamily": "Arial, sans-serif"
-                        }
-                    ]
-                }
-            },
-            "backStyles": {
-                "rules-back": {
-                    "name": "Rules Back",
-                    "elements": [
-                        {
-                            "id": "rules-back-text",
-                            "type": "text",
-                            "staticText": "Game Rules",
-                            "x": 40,
-                            "y": 60,
-                            "width": 47,
-                            "height": 10,
-                            "fontSize": 20,
-                            "color": "#CCCCCC",
-                            "fontFamily": "Arial, sans-serif"
-                        }
-                    ]
-                }
-            },
-            "customFonts": [],
-            "paperSize": "letter",
-            "drawCutGuides": true
+          "id": "wooden-club",
+          "data": {
+            "cost": "1",
+            "description": "Simple but effective. What it lacks in finesse, it makes up for in reliability.",
+            "image": "images/bronze_weapon_card_back.png",
+            "name": "Wooden Club",
+            "tier": "Bronze"
+          },
+          "count": 3,
+          "frontStyleId": "weapon-front-bronze",
+          "backStyleId": "weapon-back-bronze"
+        },
+        {
+          "id": "hunting-bow",
+          "data": {
+            "cost": "3",
+            "description": "A basic bow crafted from ash wood. Perfect for beginners learning the art of archery.",
+            "image": "images/bronze_weapon_card_back.png",
+            "name": "Hunting Bow",
+            "tier": "Bronze"
+          },
+          "count": 3,
+          "frontStyleId": "weapon-front-bronze",
+          "backStyleId": "weapon-back-bronze"
+        },
+        {
+          "id": "steel-sword",
+          "data": {
+            "cost": "5",
+            "description": "Forged by skilled hands, this blade cuts through armor with ease. A warrior's trusted companion.",
+            "image": "images/silver_weapon_card_back.png",
+            "name": "Steel Sword",
+            "tier": "Silver"
+          },
+          "count": 3,
+          "frontStyleId": "weapon-front-silver",
+          "backStyleId": "weapon-back-silver"
+        },
+        {
+          "id": "war-hammer",
+          "data": {
+            "cost": "6",
+            "description": "Heavy and devastating. One swing can shatter shields and break bones.",
+            "image": "images/silver_weapon_card_back.png",
+            "name": "War Hammer",
+            "tier": "Silver"
+          },
+          "count": 3,
+          "frontStyleId": "weapon-front-silver",
+          "backStyleId": "weapon-back-silver"
+        },
+        {
+          "id": "crossbow",
+          "data": {
+            "cost": "7",
+            "description": "Precision engineering meets deadly force. Pierces plate armor from a hundred paces.",
+            "image": "images/silver_weapon_card_back.png",
+            "name": "Crossbow",
+            "tier": "Silver"
+          },
+          "count": 3,
+          "frontStyleId": "weapon-front-silver",
+          "backStyleId": "weapon-back-silver"
+        },
+        {
+          "id": "dragon-slayer",
+          "data": {
+            "cost": "12",
+            "description": "Legendary greatsword imbued with ancient magic. Said to have felled the great wyrm Infernus.",
+            "image": "images/gold_weapon_card_back.png",
+            "name": "Dragon Slayer",
+            "tier": "Gold"
+          },
+          "count": 3,
+          "frontStyleId": "weapon-front-gold",
+          "backStyleId": "weapon-back-gold"
+        },
+        {
+          "id": "thunderstrike-axe",
+          "data": {
+            "cost": "10",
+            "description": "Crackling with elemental fury, each strike calls down lightning from the heavens.",
+            "image": "images/gold_weapon_card_back.png",
+            "name": "Thunderstrike Axe",
+            "tier": "Gold"
+          },
+          "count": 3,
+          "frontStyleId": "weapon-front-gold",
+          "backStyleId": "weapon-back-gold"
+        },
+        {
+          "id": "phoenix-longbow",
+          "data": {
+            "cost": "11",
+            "description": "Arrows shot from this bow ignite mid-flight, leaving trails of flame in their wake.",
+            "image": "images/gold_weapon_card_back.png",
+            "name": "Phoenix Longbow",
+            "tier": "Gold"
+          },
+          "count": 3,
+          "frontStyleId": "weapon-front-gold",
+          "backStyleId": "weapon-back-gold"
         }
-    ]
+      ],
+      "fields": [
+        {
+          "name": "name",
+          "type": "text"
+        },
+        {
+          "name": "cost",
+          "type": "text"
+        },
+        {
+          "name": "description",
+          "type": "text"
+        },
+        {
+          "name": "tier",
+          "type": "text"
+        },
+        {
+          "name": "image",
+          "type": "image"
+        }
+      ],
+      "frontStyles": {
+        "weapon-front-bronze": {
+          "name": "Bronze Weapon Front",
+          "elements": [
+            {
+              "id": "name-bronze",
+              "type": "text",
+              "field": "name",
+              "x": 5.000017801861198,
+              "y": 4.999997615754834,
+              "width": 53.5,
+              "height": 10,
+              "fontSize": 18,
+              "color": "#8B4513",
+              "fontFamily": "Georgia, serif"
+            },
+            {
+              "id": "cost-bronze",
+              "type": "text",
+              "field": "cost",
+              "x": 50.00001652976107,
+              "y": 16.999999968008982,
+              "width": 8.5,
+              "height": 8,
+              "fontSize": 16,
+              "color": "#CD7F32",
+              "fontFamily": "Courier New, monospace"
+            },
+            {
+              "id": "cost-label-bronze",
+              "type": "text",
+              "field": "",
+              "staticText": "💰",
+              "x": 45,
+              "y": 17,
+              "width": 5,
+              "height": 8,
+              "fontSize": 14,
+              "color": "#FFD700"
+            },
+            {
+              "id": "desc-bronze",
+              "type": "text",
+              "field": "description",
+              "x": 5.000017801861198,
+              "y": 26.99999923673992,
+              "width": 53.5,
+              "height": 30,
+              "fontSize": 11,
+              "color": "#333333",
+              "fontFamily": "Verdana, sans-serif"
+            },
+            {
+              "id": "tier-bronze",
+              "type": "text",
+              "field": "tier",
+              "x": 5.2646011351913895,
+              "y": 77.7354117702154,
+              "width": 20,
+              "height": 6,
+              "fontSize": 10,
+              "color": "#CD7F32",
+              "fontFamily": "Arial, sans-serif"
+            },
+            {
+              "id": "el-1765381162763",
+              "type": "shape",
+              "field": "",
+              "x": 43.391666666151394,
+              "y": 68.79166666584976,
+              "width": 20,
+              "height": 20,
+              "fontSize": 12,
+              "color": "#000000"
+            }
+          ]
+        },
+        "weapon-front-gold": {
+          "name": "Gold Weapon Front",
+          "elements": [
+            {
+              "id": "name-gold",
+              "type": "text",
+              "field": "name",
+              "x": 5,
+              "y": 5,
+              "width": 53.5,
+              "height": 10,
+              "fontSize": 20,
+              "color": "#8B0000",
+              "fontFamily": "Verdana, sans-serif"
+            },
+            {
+              "id": "cost-gold",
+              "type": "text",
+              "field": "cost",
+              "x": 50,
+              "y": 17,
+              "width": 8.5,
+              "height": 8,
+              "fontSize": 18,
+              "color": "#FFD700",
+              "fontFamily": "Times New Roman, serif"
+            },
+            {
+              "id": "cost-label-gold",
+              "type": "text",
+              "field": "",
+              "staticText": "💰",
+              "x": 45,
+              "y": 17,
+              "width": 5,
+              "height": 8,
+              "fontSize": 14,
+              "color": "#FFD700"
+            },
+            {
+              "id": "desc-gold",
+              "type": "text",
+              "field": "description",
+              "x": 5,
+              "y": 27,
+              "width": 53.5,
+              "height": 30,
+              "fontSize": 12,
+              "color": "#000000",
+              "fontFamily": "Georgia, serif"
+            },
+            {
+              "id": "tier-gold",
+              "type": "text",
+              "field": "tier",
+              "x": 5,
+              "y": 78,
+              "width": 20,
+              "height": 6,
+              "fontSize": 11,
+              "color": "#FFD700",
+              "fontFamily": "Helvetica, sans-serif"
+            },
+            {
+              "id": "el-1765381748509-i8hjp65sj",
+              "type": "shape",
+              "field": "",
+              "x": 43.391666666151394,
+              "y": 68.79166666584976,
+              "width": 20,
+              "height": 20,
+              "fontSize": 12,
+              "color": "#000000"
+            }
+          ]
+        },
+        "weapon-front-silver": {
+          "name": "Silver Weapon Front",
+          "elements": [
+            {
+              "id": "name-silver",
+              "type": "text",
+              "field": "name",
+              "x": 5,
+              "y": 5,
+              "width": 53.5,
+              "height": 10,
+              "fontSize": 18,
+              "color": "#2F4F4F",
+              "fontFamily": "Times New Roman, serif"
+            },
+            {
+              "id": "cost-silver",
+              "type": "text",
+              "field": "cost",
+              "x": 50,
+              "y": 17,
+              "width": 8.5,
+              "height": 8,
+              "fontSize": 16,
+              "color": "#C0C0C0",
+              "fontFamily": "Georgia, serif"
+            },
+            {
+              "id": "cost-label-silver",
+              "type": "text",
+              "field": "",
+              "staticText": "💰",
+              "x": 45,
+              "y": 17,
+              "width": 5,
+              "height": 8,
+              "fontSize": 14,
+              "color": "#FFD700"
+            },
+            {
+              "id": "desc-silver",
+              "type": "text",
+              "field": "description",
+              "x": 5,
+              "y": 27,
+              "width": 53.5,
+              "height": 30,
+              "fontSize": 11,
+              "color": "#1C1C1C",
+              "fontFamily": "Helvetica, sans-serif"
+            },
+            {
+              "id": "tier-silver",
+              "type": "text",
+              "field": "tier",
+              "x": 5,
+              "y": 78,
+              "width": 20,
+              "height": 6,
+              "fontSize": 10,
+              "color": "#C0C0C0",
+              "fontFamily": "Courier New, monospace"
+            },
+            {
+              "id": "el-1765381748509-ft9athmo8",
+              "type": "shape",
+              "field": "",
+              "x": 43.391666666151394,
+              "y": 68.79166666584976,
+              "width": 20,
+              "height": 20,
+              "fontSize": 12,
+              "color": "#000000"
+            }
+          ]
+        }
+      },
+      "backStyles": {
+        "weapon-back-bronze": {
+          "name": "Bronze Weapon Back",
+          "elements": [
+            {
+              "id": "back-image-bronze",
+              "type": "image",
+              "field": "image",
+              "x": 0,
+              "y": 0,
+              "width": 63.5,
+              "height": 88.9,
+              "objectFit": "cover"
+            }
+          ]
+        },
+        "weapon-back-gold": {
+          "name": "Gold Weapon Back",
+          "elements": [
+            {
+              "id": "back-image-gold",
+              "type": "image",
+              "field": "image",
+              "x": 0,
+              "y": 0,
+              "width": 63.5,
+              "height": 88.9,
+              "objectFit": "cover"
+            }
+          ]
+        },
+        "weapon-back-silver": {
+          "name": "Silver Weapon Back",
+          "elements": [
+            {
+              "id": "back-image-silver",
+              "type": "image",
+              "field": "image",
+              "x": 0,
+              "y": 0,
+              "width": 63.5,
+              "height": 88.9,
+              "objectFit": "cover"
+            }
+          ]
+        }
+      },
+      "paperSize": "letter",
+      "drawCutGuides": true,
+      "renderedCards": null
+    },
+    {
+      "id": "cheatsheet-deck",
+      "name": "Cheatsheet",
+      "width": 127,
+      "height": 127,
+      "cards": [
+        {
+          "id": "rules-card",
+          "data": {
+            "content": "Each turn has a Dawn Phase followed by Player Actions.\n\n🌅 Dawn Phase (Start of Each Round)\n\n✋ Hand of God Effect: If any player has a Hand of God building, they swap one tile and rotate another (different tiles)\n\n👁️ Watchtower and Shrine Effect: Watchtower and Shrine Effects occur.\n\n👹 Monster Turn: If the monster is on a tile that is completely blocked, or cannot advance toward a player they will rotate an adjacent tile that gives them the shortest distance to a player. They then skip their movement roll and skip their attack.\n\n🎲 Monster Movement: Roll 1d6 for each monster.\nOn 1-2: no movement.\nOn 3: heal 2 health (can heal past starting life count).\nOn 4-6: monster moves one tile toward the nearest player by connected paths.\nIf multiple players are equidistant, move toward the player who went most recently.\n\n⚔️ Monster Attacks: If a monster is adjacent to a player along a connected path, roll 1d4 for damage to that player\n\n💰 Resource Generation: Players gain resources based on their tile:\n🥉 Bronze tiles: 3 Bronze resources\n🥈 Silver tiles: 2 Silver resources\n🥇 Gold tiles: 1 Gold resource\n⛏️ Mining Drill: Players gain resources from mining drill buildings\n⚖️ Trading Post: Players may trade resources\n\n🪙 First Player Token: First player token is passed to the next player clockwise and they start the player actions phase.",
+            "title": "Turn Structure"
+          },
+          "count": 1,
+          "frontStyleId": "rules-front",
+          "backStyleId": "rules-back"
+        }
+      ],
+      "fields": [
+        {
+          "name": "title",
+          "type": "text"
+        },
+        {
+          "name": "content",
+          "type": "text"
+        }
+      ],
+      "frontStyles": {
+        "rules-front": {
+          "name": "Rules Front",
+          "elements": [
+            {
+              "id": "rules-title",
+              "type": "text",
+              "field": "title",
+              "x": 5,
+              "y": 5,
+              "width": 117,
+              "height": 10,
+              "fontSize": 24,
+              "color": "#000000",
+              "fontFamily": "Arial, sans-serif"
+            },
+            {
+              "id": "rules-content",
+              "type": "text",
+              "field": "content",
+              "x": 5,
+              "y": 20,
+              "width": 117,
+              "height": 102,
+              "fontSize": 10,
+              "color": "#333333",
+              "fontFamily": "Arial, sans-serif"
+            }
+          ]
+        }
+      },
+      "backStyles": {
+        "rules-back": {
+          "name": "Rules Back",
+          "elements": [
+            {
+              "id": "rules-back-text",
+              "type": "text",
+              "field": "",
+              "staticText": "Game Rules",
+              "x": 40,
+              "y": 60,
+              "width": 47,
+              "height": 10,
+              "fontSize": 20,
+              "color": "#CCCCCC",
+              "fontFamily": "Arial, sans-serif"
+            }
+          ]
+        }
+      },
+      "paperSize": "letter",
+      "drawCutGuides": true,
+      "renderedCards": null
+    }
+  ]
 }

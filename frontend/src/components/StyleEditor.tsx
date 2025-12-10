@@ -1,9 +1,12 @@
 import { Stack, Group, Button, Text, Paper, Select, ColorInput, NumberInput, TextInput, ActionIcon, ScrollArea, SegmentedControl, Center, Switch, Slider } from '@mantine/core';
 import { Deck, CardLayout, LayoutElement } from '../types';
 import { CardRender } from './CardRender';
+import { BottomControlBar } from './BottomControlBar';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Rnd } from 'react-rnd';
-import { IconPlus, IconTrash, IconGripVertical, IconBold, IconItalic, IconUnderline, IconAlignLeft, IconAlignCenter, IconAlignRight, IconArrowBarUp, IconArrowBarDown, IconArrowsVertical } from '@tabler/icons-react';
+import { IconPlus, IconTrash, IconGripVertical, IconBold, IconItalic, IconUnderline, IconAlignLeft, IconAlignCenter, IconAlignRight, IconArrowBarUp, IconArrowBarDown, IconArrowsVertical, IconPolygon } from '@tabler/icons-react';
+import { PRESET_SHAPES } from '../utils/Shapes';
+import { Menu } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 
@@ -21,6 +24,7 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
   const [zoom, setZoom] = useState(1);
   const [renderKey, setRenderKey] = useState(0);
   const [canvasReady, setCanvasReady] = useState(false);
+  const [draggedPoint, setDraggedPoint] = useState<{ elementId: string, pointIndex: number } | null>(null);
 
   // Live Preview State
   const [previewCardId, setPreviewCardId] = useState<string | null>(null);
@@ -91,10 +95,17 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
     }
   };
 
-  const addElement = (type: 'text' | 'image') => {
+  const addElement = (type: 'text' | 'image' | 'shape', shapePreset?: string) => {
     if (!currentStyle) return;
+
+    let points = undefined;
+    if (type === 'shape' && shapePreset) {
+        points = PRESET_SHAPES.find(p => p.name === shapePreset)?.points;
+    }
+
     const newElement: LayoutElement = {
       id: `el-${Date.now()}`,
+      name: type === 'shape' && shapePreset ? shapePreset : (type === 'text' ? 'New Text' : 'New Image'),
       type,
       x: 10, // mm
       y: 10, // mm
@@ -103,6 +114,9 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
       staticText: type === 'text' ? 'New Text' : undefined,
       fontSize: 12,
       color: '#000000',
+      points: points ? [...points] : undefined,
+      fillColor: type === 'shape' ? '#cccccc' : undefined,
+      strokeWidth: type === 'shape' ? 0 : undefined,
     };
     handleStyleChange({
       ...currentStyle,
@@ -127,6 +141,28 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
     });
     setSelectedElementId(null);
   };
+
+  const duplicateElement = (elementId: string, targetStyleIds: string[]) => {
+      if (!selectedStyleId) return;
+      const elToCopy = deck.frontStyles[selectedStyleId]?.elements.find((e: LayoutElement) => e.id === elementId)
+                    || deck.backStyles[selectedStyleId]?.elements.find((e: LayoutElement) => e.id === elementId);
+
+      if (!elToCopy) return;
+
+      const newDeck = { ...deck };
+
+      targetStyleIds.forEach(targetId => {
+          const targetStyle = newDeck.frontStyles[targetId] || newDeck.backStyles[targetId];
+          if (targetStyle) {
+              const newEl = { ...elToCopy, id: `el-${Date.now()}-${Math.random().toString(36).substr(2, 9)}` };
+              targetStyle.elements = [...targetStyle.elements, newEl];
+          }
+      });
+
+      setDeck(newDeck);
+      notifications.show({ title: 'Success', message: `Copied element to ${targetStyleIds.length} styles` });
+  };
+
 
   const onDragEnd = (result: DropResult) => {
     if (!result.destination || !currentStyle) return;
@@ -202,6 +238,50 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
       setSelectedStyleId(fallbackId);
   };
 
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+        if (!draggedPoint || !currentStyle || !canvasReady) return;
+        const el = currentStyle.elements.find(e => e.id === draggedPoint.elementId);
+        if (!el || !el.points) return;
+
+        const canvas = document.querySelector('.card-editor-canvas') as HTMLElement;
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+
+        // Use current zoom scale
+        const scale = zoom;
+
+        const elX = el.x * MM_TO_PX * scale;
+        const elY = el.y * MM_TO_PX * scale;
+        const elW = el.width * MM_TO_PX * scale;
+        const elH = el.height * MM_TO_PX * scale;
+
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        const newX = (mouseX - elX) / elW;
+        const newY = (mouseY - elY) / elH;
+
+        const newPoints = [...el.points];
+        newPoints[draggedPoint.pointIndex] = { x: newX, y: newY };
+        updateElement(el.id, { points: newPoints });
+    };
+
+    const handleMouseUp = () => {
+        setDraggedPoint(null);
+    };
+
+    if (draggedPoint) {
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [draggedPoint, currentStyle, zoom, canvasReady, deck]); // Dependencies include deck to ensure latest updateElement triggers
+
+
   if (!currentStyle) return <Text>No styles defined.</Text>;
 
   const selectedElement = currentStyle.elements.find(el => el.id === selectedElementId);
@@ -214,6 +294,7 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
   console.log("Render - canvasReady:", canvasReady, "selectedStyleId:", selectedStyleId);
 
   return (
+    <>
     <Group align="flex-start" h="calc(100vh - 140px)" gap={0}>
       {/* Left Sidebar: Style & Element Properties */}
       <Stack w={300} h="100%" style={{ borderRight: '1px solid #eee' }} p="md">
@@ -289,133 +370,27 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
         <Group>
           <Button size="xs" onClick={() => addElement('text')}>Add Text</Button>
           <Button size="xs" onClick={() => addElement('image')}>Add Image</Button>
+          <Menu shadow="md" width={200}>
+            <Menu.Target>
+                <Button size="xs" rightSection={<IconPolygon size={14} />}>Add Shape</Button>
+            </Menu.Target>
+            <Menu.Dropdown>
+                <Menu.Label>Presets</Menu.Label>
+                {PRESET_SHAPES.map(shape => (
+                    <Menu.Item key={shape.name} onClick={() => addElement('shape', shape.name)}>
+                        {shape.label}
+                    </Menu.Item>
+                ))}
+            </Menu.Dropdown>
+          </Menu>
         </Group>
 
-        {selectedElement && (
-          <Paper p="xs" withBorder mt="md">
-            <Stack gap="xs">
-              <Text size="sm" fw={500}>Properties</Text>
-              <Select
-                label="Data Field"
-                placeholder="Static Text"
-                data={[{ value: '', label: 'Static Text' }, ...deck.fields.map(f => ({ value: f.name, label: f.name }))]}
-                value={selectedElement.field || ''}
-                onChange={(val) => updateElement(selectedElement.id, { field: val || undefined })}
-              />
-              {!selectedElement.field && selectedElement.type === 'text' && (
-                <TextInput
-                  label="Static Text"
-                  value={selectedElement.staticText || ''}
-                  onChange={(e) => updateElement(selectedElement.id, { staticText: e.currentTarget.value })}
-                  styles={{
-                    input: {
-                        fontWeight: selectedElement.fontWeight === 'bold' ? 'bold' : 'normal',
-                        fontStyle: selectedElement.fontStyle === 'italic' ? 'italic' : 'normal',
-                        textDecoration: selectedElement.textDecoration === 'underline' ? 'underline' : 'none',
-                        textAlign: selectedElement.textAlign || 'left',
-                    }
-                  }}
-                />
-              )}
-              {selectedElement.type === 'text' && (
-                <>
-                  <Select
-                    label="Font Family"
-                    data={[
-                        { group: 'Standard Fonts', items: [
-                            { value: 'Arial, sans-serif', label: 'Arial' },
-                            { value: 'Verdana, sans-serif', label: 'Verdana' },
-                            { value: 'Helvetica, sans-serif', label: 'Helvetica' },
-                            { value: 'Times New Roman, serif', label: 'Times New Roman' },
-                            { value: 'Courier New, monospace', label: 'Courier New' },
-                            { value: 'Georgia, serif', label: 'Georgia' },
-                        ]},
-                        { group: 'Custom Fonts', items: (deck.customFonts || []).map(f => ({ value: f.family, label: f.name })) }
-                    ]}
-                    value={selectedElement.fontFamily || 'Arial, sans-serif'}
-                    onChange={(val) => updateElement(selectedElement.id, { fontFamily: val || undefined })}
-                    searchable
-                  />
-                  <NumberInput
-                    label="Font Size"
-                    value={selectedElement.fontSize}
-                    onChange={(val) => updateElement(selectedElement.id, { fontSize: Number(val) })}
-                  />
-                  <ColorInput
-                    label="Color"
-                    value={selectedElement.color}
-                    onChange={(val) => updateElement(selectedElement.id, { color: val })}
-                  />
 
-                  <Text size="sm" fw={500} mt="xs">Alignment</Text>
-                  <Group grow>
-                      <SegmentedControl
-                        value={selectedElement.textAlign || 'center'}
-                        onChange={(val) => updateElement(selectedElement.id, { textAlign: val as any })}
-                        data={[
-                            { value: 'left', label: <Center><IconAlignLeft size={16} /></Center> },
-                            { value: 'center', label: <Center><IconAlignCenter size={16} /></Center> },
-                            { value: 'right', label: <Center><IconAlignRight size={16} /></Center> },
-                        ]}
-                      />
-                  </Group>
-
-                  <Text size="sm" fw={500} mt="xs">Vertical Alignment</Text>
-                  <Group grow>
-                      <SegmentedControl
-                        value={selectedElement.verticalAlign || 'center'}
-                        onChange={(val) => updateElement(selectedElement.id, { verticalAlign: val as any })}
-                        data={[
-                            { value: 'top', label: <Center><IconArrowBarUp size={16} /></Center> },
-                            { value: 'middle', label: <Center><IconArrowsVertical size={16} /></Center> },
-                            { value: 'bottom', label: <Center><IconArrowBarDown size={16} /></Center> },
-                        ]}
-                      />
-                  </Group>
-
-                  <Text size="sm" fw={500} mt="xs">Formatting</Text>
-                  <Group>
-                      <ActionIcon
-                        variant={selectedElement.fontWeight === 'bold' ? 'filled' : 'default'}
-                        onClick={() => updateElement(selectedElement.id, { fontWeight: selectedElement.fontWeight === 'bold' ? 'normal' : 'bold' })}
-                      >
-                          <IconBold size={16} />
-                      </ActionIcon>
-                      <ActionIcon
-                        variant={selectedElement.fontStyle === 'italic' ? 'filled' : 'default'}
-                        onClick={() => updateElement(selectedElement.id, { fontStyle: selectedElement.fontStyle === 'italic' ? 'normal' : 'italic' })}
-                      >
-                          <IconItalic size={16} />
-                      </ActionIcon>
-                      <ActionIcon
-                        variant={selectedElement.textDecoration === 'underline' ? 'filled' : 'default'}
-                        onClick={() => updateElement(selectedElement.id, { textDecoration: selectedElement.textDecoration === 'underline' ? 'none' : 'underline' })}
-                      >
-                          <IconUnderline size={16} />
-                      </ActionIcon>
-                  </Group>
-                </>
-              )}
-              {selectedElement.type === 'image' && (
-                  <Select
-                    label="Image Fit"
-                    data={[
-                        { value: 'contain', label: 'Fit (Contain)' },
-                        { value: 'cover', label: 'Crop (Cover)' },
-                        { value: 'fill', label: 'Stretch (Fill)' },
-                    ]}
-                    value={selectedElement.objectFit || 'contain'}
-                    onChange={(val) => updateElement(selectedElement.id, { objectFit: val as any })}
-                  />
-              )}
-              <Button color="red" size="xs" onClick={() => removeElement(selectedElement.id)}>Remove</Button>
-            </Stack>
-          </Paper>
-        )}
       </Stack>
 
       {/* Center Canvas */}
-      <ScrollArea style={{ flex: 1, height: '100%', backgroundColor: '#f0f0f0' }}>
+      <Stack style={{ flex: 1, height: '100%' }} gap={0}>
+      <ScrollArea style={{ flex: 1, backgroundColor: '#f0f0f0' }}>
         <Center py={50} style={{ minHeight: '100%' }}>
             <div
                 ref={setCanvasRef}
@@ -426,8 +401,9 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
                     backgroundColor: 'white',
                     position: 'relative',
                     boxShadow: '0 0 20px rgba(0,0,0,0.1)',
-                    overflow: 'hidden',
+                    overflow: 'visible', // Allow handles to show outside
                 }}
+                className="card-editor-canvas"
                 onClick={() => setSelectedElementId(null)}
             >
                 {/* Live Preview Overlay */}
@@ -518,16 +494,70 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
                                         </div>
                                     ) : <Text size="xs" c="dimmed">Image Placeholder</Text>}
                                 </div>
+                            ) : el.type === 'shape' && el.points ? (
+                                <svg
+                                    width="100%"
+                                    height="100%"
+                                    viewBox="0 0 100 100"
+                                    preserveAspectRatio="none"
+                                    style={{ overflow: 'visible' }}
+                                >
+                                    <polygon
+                                        points={el.points.map(p => `${p.x * 100},${p.y * 100}`).join(' ')}
+                                        fill={el.fillColor || '#cccccc'}
+                                        stroke={el.strokeColor || 'none'}
+                                        strokeWidth={el.strokeWidth || 0}
+                                        vectorEffect="non-scaling-stroke"
+                                    />
+                                </svg>
                             ) : (
                                 el.field ? `{${el.field}}` : el.staticText
                             )}
                         </div>
+                        {/* Point Editing Handles */}
+                        {selectedElementId === el.id && el.type === 'shape' && el.points && (
+                            <>
+                                {el.points.map((p, i) => (
+                                    <div
+                                        key={i}
+                                        style={{
+                                            position: 'absolute',
+                                            left: `${p.x * 100}%`,
+                                            top: `${p.y * 100}%`,
+                                            width: 10,
+                                            height: 10,
+                                            backgroundColor: '#228be6',
+                                            border: '1px solid white',
+                                            borderRadius: '50%',
+                                            transform: 'translate(-50%, -50%)',
+                                            cursor: 'crosshair',
+                                            pointerEvents: 'auto', // Re-enable pointer events for handles
+                                            zIndex: 1001
+                                        }}
+                                        onMouseDown={(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                            setDraggedPoint({ elementId: el.id, pointIndex: i });
+                                        }}
+                                    />
+                                ))}
+                            </>
+                        )}
                     </Rnd>
                     );
                 })}
             </div>
         </Center>
       </ScrollArea>
+        <BottomControlBar
+            selectedElement={selectedElement}
+            updateElement={updateElement}
+            removeElement={removeElement}
+            duplicateElement={duplicateElement}
+            deck={deck}
+            currentStyleId={selectedStyleId || ''}
+        />
+      </Stack>
 
       {/* Right Sidebar: Layers */}
       <Stack w={250} h="100%" style={{ borderLeft: '1px solid #eee' }} p="md">
@@ -568,7 +598,7 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
                                                     truncate
                                                     style={{ flex: 1, textAlign: el.textAlign || 'left' }}
                                                   >
-                                                      {el.type === 'image' ? 'Image' : (el.staticText || `{${el.field}}`)}
+                                                      {el.name || (el.type === 'image' ? 'Image' : (el.staticText || `{${el.field}}`))}
                                                   </Text>
                                                   <ActionIcon color="red" size="sm" variant="subtle" onClick={(e) => { e.stopPropagation(); removeElement(el.id); }}>
                                                       <IconTrash size={14} />
@@ -590,5 +620,6 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
           </ScrollArea>
       </Stack>
     </Group>
+    </>
   );
 }

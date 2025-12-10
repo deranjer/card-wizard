@@ -20,7 +20,8 @@ export interface Card {
 
 export interface LayoutElement {
     id: string;
-    type: 'text' | 'image';
+    name?: string; // User-friendly name for layers
+    type: 'text' | 'image' | 'shape';
     field?: string; // The key from the data source (optional for static text)
     staticText?: string; // Manually defined text
     x: number;
@@ -36,6 +37,11 @@ export interface LayoutElement {
     fontWeight?: 'normal' | 'bold';
     fontStyle?: 'normal' | 'italic';
     textDecoration?: 'none' | 'underline';
+    // Shape properties
+    points?: { x: number; y: number }[]; // Normalized 0-1 relative to width/height
+    fillColor?: string;
+    strokeColor?: string;
+    strokeWidth?: number;
 }
 
 export interface CardLayout {
