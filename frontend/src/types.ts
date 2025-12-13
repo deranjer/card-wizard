@@ -70,6 +70,8 @@ export interface Deck {
     fields: FieldDefinition[];
     frontStyles: Record<string, CardLayout>;
     backStyles: Record<string, CardLayout>;
+    defaultFrontStyleId: string;
+    defaultBackStyleId: string;
     customFonts: CustomFont[];
     paperSize: 'letter' | 'a4';
     drawCutGuides?: boolean;
@@ -111,6 +113,8 @@ export const DEFAULT_DECK: Deck = {
     backStyles: {
         'default-back': { name: 'Default Back', elements: [] }
     },
+    defaultFrontStyleId: 'default-front',
+    defaultBackStyleId: 'default-back',
     customFonts: [],
     paperSize: 'letter',
 };

@@ -1,20 +1,284 @@
 import { AppShell, Burger, Group, NavLink, Text, Button, TextInput, ActionIcon, Menu, Tabs, Drawer } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { useState, useEffect } from 'react';
-import { IconPlus, IconDeviceFloppy, IconFolderOpen, IconTrash, IconCards, IconHelp, IconLayoutSidebarLeftCollapse, IconLayoutSidebarLeftExpand } from '@tabler/icons-react';
+import { IconPlus, IconDeviceFloppy, IconFolderOpen, IconTrash, IconCards, IconHelp, IconLayoutSidebarLeftCollapse, IconLayoutSidebarLeftExpand, IconChartBar, IconChevronDown, IconFileTypePdf, IconPhoto, IconTable, IconFilePlus } from '@tabler/icons-react';
 import { Game, Deck, DEFAULT_DECK } from '../types';
 import { DeckDetails } from './DeckDetails';
 import { StyleEditor } from './StyleEditor';
 import { DeckPreview } from './DeckPreview';
 import { PrintPreview } from './PrintPreview';
 import { Help } from './Help';
-import { SaveGame, LoadGame } from '../../wailsjs/go/main/App';
+import { AssetGallery } from './AssetGallery';
+import { DeckExport } from './DeckExport';
+import { KeyStatsModal } from './KeyStatsModal';
+import { SaveGame, LoadGame, NewGame, SaveImages, ExportGameXLSX } from '../../wailsjs/go/main/App';
 import { notifications } from '@mantine/notifications';
+import { CardRender } from './CardRender';
 
 export function GameView() {
+
+    const handleExportImages = async () => {
+        if (!activeDeckId || !game) return;
+        const deck = game.decks.find(d => d.id === activeDeckId);
+        if (!deck) return;
+
+        try {
+            notifications.show({ title: 'Exporting', message: 'Generating images, please wait...', loading: true, autoClose: false, id: 'export-images' });
+
+            const container = document.createElement('div');
+            container.style.position = 'absolute';
+            container.style.top = '-9999px';
+            container.style.left = '-9999px';
+            container.style.width = 'fit-content';
+            document.body.appendChild(container);
+
+            const images: Record<string, string> = {};
+            const { createRoot } = await import('react-dom/client');
+            const html2canvas = (await import('html2canvas')).default;
+
+            for (const card of deck.cards) {
+                // Render Front
+                const frontDiv = document.createElement('div');
+                container.appendChild(frontDiv);
+                const frontRoot = createRoot(frontDiv);
+
+                await new Promise<void>((resolve) => {
+                    frontRoot.render(
+                        <div style={{ width: 'fit-content', height: 'fit-content', background: 'white' }}>
+                            <CardRender
+                                deck={deck}
+                                card={card}
+                                mode="front"
+                                scale={1}
+                            />
+                        </div>
+                    );
+                    setTimeout(resolve, 100);
+                });
+
+                const frontCanvas = await html2canvas(frontDiv.firstChild as HTMLElement, {
+                    backgroundColor: null,
+                    logging: false,
+                    useCORS: true,
+                    scale: 2
+                });
+                images[`${card.id}-front.png`] = frontCanvas.toDataURL('image/png');
+                frontRoot.unmount();
+                container.removeChild(frontDiv);
+
+                // Render Back
+                const backDiv = document.createElement('div');
+                container.appendChild(backDiv);
+                const backRoot = createRoot(backDiv);
+
+                await new Promise<void>((resolve) => {
+                    backRoot.render(
+                        <div style={{ width: 'fit-content', height: 'fit-content', background: 'white' }}>
+                            <CardRender
+                                deck={deck}
+                                card={card}
+                                mode="back"
+                                scale={1}
+                            />
+                        </div>
+                    );
+                    setTimeout(resolve, 100);
+                });
+
+                const backCanvas = await html2canvas(backDiv.firstChild as HTMLElement, {
+                     backgroundColor: null,
+                     logging: false,
+                     useCORS: true,
+                     scale: 2
+                });
+                images[`${card.id}-back.png`] = backCanvas.toDataURL('image/png');
+                backRoot.unmount();
+                container.removeChild(backDiv);
+            }
+
+            document.body.removeChild(container);
+            await SaveImages(images);
+
+            notifications.update({ id: 'export-images', title: 'Success', message: 'Images exported successfully', color: 'green', loading: false, autoClose: 3000 });
+
+        } catch (error) {
+            console.error(error);
+            notifications.update({ id: 'export-images', title: 'Error', message: 'Failed to export images', color: 'red', loading: false, autoClose: 3000 });
+        }
+    };
+
+    const handleExportPDF = async () => {
+        // ... (Existing or new implementation)
+        // For now, let's assuming PrintPreview handles it or we call backend direct
+        // Since we didn't implement backend direct PDF from JSON easily without frontend layout,
+        // usually PrintPreview is the way. But here let's just show notification or link to Print tab.
+        notifications.show({ title: 'Info', message: 'Use the Print tab to generate PDFs.', color: 'blue' });
+    };
+
+    const handleExportAllDecksImages = async () => {
+        try {
+            notifications.show({
+                title: 'Exporting',
+                message: 'Generating images for all decks, please wait...',
+                loading: true,
+                autoClose: false,
+                id: 'export-all-images'
+            });
+
+            const container = document.createElement('div');
+            container.style.position = 'absolute';
+            container.style.top = '-9999px';
+            container.style.left = '-9999px';
+            container.style.width = 'fit-content';
+            document.body.appendChild(container);
+
+            const images: Record<string, string> = {};
+            const { createRoot } = await import('react-dom/client');
+            const html2canvas = (await import('html2canvas')).default;
+
+            // Loop through all decks
+            for (const deck of game.decks) {
+                for (const card of deck.cards) {
+                    // Render Front
+                    const frontDiv = document.createElement('div');
+                    container.appendChild(frontDiv);
+                    const frontRoot = createRoot(frontDiv);
+
+                    await new Promise<void>((resolve) => {
+                        frontRoot.render(
+                            <div style={{ width: 'fit-content', height: 'fit-content', background: 'white' }}>
+                                <CardRender
+                                    deck={deck}
+                                    card={card}
+                                    mode="front"
+                                    scale={1}
+                                />
+                            </div>
+                        );
+                        setTimeout(resolve, 100);
+                    });
+
+                    const frontCanvas = await html2canvas(frontDiv.firstChild as HTMLElement, {
+                        backgroundColor: null,
+                        logging: false,
+                        useCORS: true,
+                        scale: 2
+                    });
+                    images[`${deck.name}-${card.id}-front.png`] = frontCanvas.toDataURL('image/png');
+                    frontRoot.unmount();
+                    container.removeChild(frontDiv);
+
+                    // Render Back
+                    const backDiv = document.createElement('div');
+                    container.appendChild(backDiv);
+                    const backRoot = createRoot(backDiv);
+
+                    await new Promise<void>((resolve) => {
+                        backRoot.render(
+                            <div style={{ width: 'fit-content', height: 'fit-content', background: 'white' }}>
+                                <CardRender
+                                    deck={deck}
+                                    card={card}
+                                    mode="back"
+                                    scale={1}
+                                />
+                            </div>
+                        );
+                        setTimeout(resolve, 100);
+                    });
+
+                    const backCanvas = await html2canvas(backDiv.firstChild as HTMLElement, {
+                        backgroundColor: null,
+                        logging: false,
+                        useCORS: true,
+                        scale: 2
+                    });
+                    images[`${deck.name}-${card.id}-back.png`] = backCanvas.toDataURL('image/png');
+                    backRoot.unmount();
+                    container.removeChild(backDiv);
+                }
+            }
+
+            document.body.removeChild(container);
+            await SaveImages(images);
+
+            notifications.update({
+                id: 'export-all-images',
+                title: 'Success',
+                message: 'All decks exported as images successfully',
+                color: 'green',
+                loading: false,
+                autoClose: 3000
+            });
+
+        } catch (error) {
+            console.error(error);
+            notifications.update({
+                id: 'export-all-images',
+                title: 'Error',
+                message: 'Failed to export images',
+                color: 'red',
+                loading: false,
+                autoClose: 3000
+            });
+        }
+    };
+
+    const handleExportAllDecksXLSX = async () => {
+        try {
+            await ExportGameXLSX(game as any);
+            notifications.show({
+                title: 'Success',
+                message: 'Game exported to Excel with multiple sheets',
+                color: 'green'
+            });
+        } catch (err) {
+            notifications.show({
+                title: 'Error',
+                message: String(err),
+                color: 'red'
+            });
+        }
+    };
+
+    const handleExportAllDecksPDF = async () => {
+         // Placeholder for Excel export integration if needed here
+         notifications.show({ title: 'Info', message: 'Excel export available in Spreadsheet view.', color: 'blue' });
+    };
+
+    const handleNewGame = async () => {
+        if (window.confirm('Do you want to save your current game before starting a new one?')) {
+            await handleSaveGame();
+        }
+
+        try {
+            await NewGame();
+            setGame({
+                name: 'New Game',
+                decks: [{ ...DEFAULT_DECK, id: `deck-${Date.now()}` }]
+            });
+             // Reset active deck and tab
+             const newDeckId = `deck-${Date.now()}`;
+             // Note: setGame is async, but we are setting safe defaults.
+             // Ideally we construct the object first.
+             const newGame: Game = {
+                 name: 'New Game',
+                 decks: [{ ...DEFAULT_DECK, id: newDeckId }]
+             };
+             setGame(newGame);
+             setActiveDeckId(newGame.decks[0].id);
+             setActiveTab('details');
+
+            notifications.show({ title: 'Success', message: 'Started new game' });
+        } catch (err) {
+            notifications.show({ title: 'Error', message: String(err), color: 'red' });
+        }
+    };
+
     const [opened, { toggle }] = useDisclosure();
     const [sidebarCollapsed, { toggle: toggleSidebar }] = useDisclosure(false);
     const [helpOpened, { open: openHelp, close: closeHelp }] = useDisclosure(false);
+    const [statsOpened, { open: openStats, close: closeStats }] = useDisclosure(false);
     const [game, setGame] = useState<Game>({
         name: 'New Game',
         decks: [{ ...DEFAULT_DECK, id: `deck-${Date.now()}` }]
@@ -110,7 +374,7 @@ export function GameView() {
             }}
             padding="md"
         >
-            <AppShell.Header>
+            <AppShell.Header style={{ zIndex: 100 }}>
                 <Group h="100%" px="md" justify="space-between">
                     <Group>
                         <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
@@ -127,8 +391,29 @@ export function GameView() {
                         />
                     </Group>
                     <Group>
+                        <Button variant="default" leftSection={<IconFilePlus size={16} />} onClick={handleNewGame}>New Game</Button>
                         <Button variant="default" leftSection={<IconFolderOpen size={16} />} onClick={handleLoadGame}>Load Game</Button>
+                        <Menu shadow="md" width={200}>
+                            <Menu.Target>
+                                <Button variant="light" rightSection={<IconChevronDown size={14} />}>Export Game</Button>
+                            </Menu.Target>
+                            <Menu.Dropdown>
+                                <Menu.Label>Export All Decks</Menu.Label>
+                                <Menu.Item leftSection={<IconFileTypePdf size={14} />} onClick={() => handleExportAllDecksPDF()}>
+                                    Export as PDF
+                                </Menu.Item>
+                                <Menu.Item leftSection={<IconPhoto size={14} />} onClick={() => handleExportAllDecksImages()}>
+                                    Export as Images
+                                </Menu.Item>
+                                <Menu.Item leftSection={<IconTable size={14} />} onClick={() => handleExportAllDecksXLSX()}>
+                                    Export to Excel
+                                </Menu.Item>
+                            </Menu.Dropdown>
+                        </Menu>
                         <Button leftSection={<IconDeviceFloppy size={16} />} onClick={handleSaveGame}>Save Game</Button>
+                        <ActionIcon variant="subtle" size="lg" onClick={openStats} title="Game Statistics">
+                            <IconChartBar size={24} />
+                        </ActionIcon>
                         <ActionIcon variant="subtle" size="lg" onClick={openHelp} title="Help">
                             <IconHelp size={24} />
                         </ActionIcon>
@@ -176,6 +461,8 @@ export function GameView() {
                     <Tabs.List>
                         <Tabs.Tab value="details">Deck Details</Tabs.Tab>
                         <Tabs.Tab value="design">Card Design</Tabs.Tab>
+                        <Tabs.Tab value="gallery">Asset Gallery</Tabs.Tab>
+                        <Tabs.Tab value="export">Export</Tabs.Tab>
                         <Tabs.Tab value="preview">Preview</Tabs.Tab>
                         <Tabs.Tab value="print">Print</Tabs.Tab>
                     </Tabs.List>
@@ -198,8 +485,16 @@ export function GameView() {
                         <StyleEditor key={activeDeck.id} deck={activeDeck} setDeck={updateDeck} />
                     </Tabs.Panel>
 
+                    <Tabs.Panel value="gallery">
+                        <AssetGallery onNavigateToHelp={navigateToHelp} />
+                    </Tabs.Panel>
+
                     <Tabs.Panel value="preview">
                         <DeckPreview key={activeDeck.id} deck={activeDeck} onNavigateToHelp={navigateToHelp} />
+                    </Tabs.Panel>
+
+                    <Tabs.Panel value="export">
+                        <DeckExport key={activeDeck.id} deck={activeDeck} />
                     </Tabs.Panel>
 
                     <Tabs.Panel value="print">
@@ -219,7 +514,14 @@ export function GameView() {
                 padding="md"
             >
                 <Help section={helpSection} />
+                <Help section={helpSection} />
             </Drawer>
+
+            <KeyStatsModal
+                game={game}
+                opened={statsOpened}
+                onClose={closeStats}
+            />
         </AppShell>
     );
 }

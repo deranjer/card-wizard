@@ -5,6 +5,7 @@ import { StyleEditor } from './StyleEditor';
 import { DeckPreview } from './DeckPreview';
 import { PrintPreview } from './PrintPreview';
 import { Help } from './Help';
+import { AssetGallery } from './AssetGallery';
 import { Deck, DEFAULT_DECK } from '../types';
 
 export function Layout() {
@@ -45,6 +46,7 @@ export function Layout() {
           <Tabs.List>
             <Tabs.Tab value="details">Deck Details</Tabs.Tab>
             <Tabs.Tab value="design">Card Design</Tabs.Tab>
+            <Tabs.Tab value="gallery">Asset Gallery</Tabs.Tab>
             <Tabs.Tab value="preview">Preview</Tabs.Tab>
             <Tabs.Tab value="print">Print</Tabs.Tab>
             <Tabs.Tab value="help">Help</Tabs.Tab>
@@ -61,6 +63,10 @@ export function Layout() {
 
           <Tabs.Panel value="design">
             <StyleEditor key={loadId} deck={deck} setDeck={setDeck} />
+          </Tabs.Panel>
+
+          <Tabs.Panel value="gallery">
+            <AssetGallery onNavigateToHelp={navigateToHelp} />
           </Tabs.Panel>
 
           <Tabs.Panel value="preview">

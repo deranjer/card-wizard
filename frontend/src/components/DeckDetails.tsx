@@ -1,6 +1,7 @@
 import { Container, Title, TextInput, NumberInput, Group, Button, Stack, Paper, Text, Select, Tabs, ActionIcon, Modal, Anchor, Menu, Switch } from '@mantine/core';
 import { Deck } from '../types';
-import { ImportXLSX, ExportXLSX, SelectFontFile } from '../../wailsjs/go/main/App';
+import { ExportXLSX, SelectFontFile, SelectExcelFile, GetExcelHeaders, ImportCardsWithMapping } from '../../wailsjs/go/main/App';
+import { main } from '../../wailsjs/go/models';
 import { notifications } from '@mantine/notifications';
 import { SpreadsheetView } from './SpreadsheetView';
 import { IconTable, IconSettings, IconPlus, IconTrash, IconHelp, IconEye, IconDatabase } from '@tabler/icons-react';
@@ -26,23 +27,159 @@ const CARD_PRESETS = [
 export function DeckDetails({ deck, setDeck, onDeckLoad, onNavigateToHelp, onDeleteDeck }: DeckDetailsProps) {
   const [fullWidth, setFullWidth] = useState(true);
   const [compactMode, setCompactMode] = useState(false);
+  const [showRawValues, setShowRawValues] = useState(false);
 
-  const handleImport = async () => {
+  const [sheetSelection, setSheetSelection] = useState<main.ExcelSelection | null>(null);
+  const [selectedSheet, setSelectedSheet] = useState<string>('');
+  const [sheetModalOpen, setSheetModalOpen] = useState(false);
+
+
+  const [mappingModalOpen, setMappingModalOpen] = useState(false);
+  const [excelHeaders, setExcelHeaders] = useState<string[]>([]);
+  const [columnMapping, setColumnMapping] = useState({
+      generateIdFrom: '',
+      count: '',
+      frontStyle: '',
+      backStyle: ''
+  });
+  const [importTarget, setImportTarget] = useState<{path: string, sheet: string} | null>(null);
+
+
+  const handleImportClick = async () => {
     try {
-      const cards = await ImportXLSX();
-      if (cards) {
-        // When importing, we might need to infer fields if none exist
-        let fields = deck.fields;
-        if (fields.length === 0 && cards.length > 0) {
-            fields = Object.keys(cards[0].data).map(key => ({ name: key, type: 'text' }));
-        }
-        setDeck({ ...deck, cards: cards as any, fields });
-        onDeckLoad?.();
-        notifications.show({ title: 'Success', message: `Imported ${cards.length} cards` });
+      const selection = await SelectExcelFile();
+      if (selection && selection.sheets.length > 0) {
+          if (selection.sheets.length === 1) {
+              await startMappingProcess(selection.filePath, selection.sheets[0]);
+          } else {
+              setSheetSelection(selection);
+              setSelectedSheet(selection.sheets[0]);
+              setSheetModalOpen(true);
+          }
       }
     } catch (err) {
       notifications.show({ title: 'Error', message: String(err), color: 'red' });
     }
+  };
+
+  const confirmSheetSelection = async () => {
+    setSheetModalOpen(false);
+    if (sheetSelection && selectedSheet) {
+        await startMappingProcess(sheetSelection.filePath, selectedSheet);
+        setSheetSelection(null);
+    }
+  };
+
+  const startMappingProcess = async (path: string, sheet: string) => {
+      try {
+          const headers = await GetExcelHeaders(path, sheet);
+          setExcelHeaders(headers);
+          setImportTarget({ path, sheet });
+
+          // Auto-guess mapping
+          const mapping = { generateIdFrom: '', count: '', frontStyle: '', backStyle: '' };
+          const lowerHeaders = headers.map(h => h.toLowerCase());
+
+          const findHeader = (keywords: string[]) => {
+              for (const kw of keywords) {
+                  const idx = lowerHeaders.indexOf(kw.toLowerCase());
+                  if (idx !== -1) return headers[idx];
+              }
+              // Partial match
+               for (const kw of keywords) {
+                  const idx = lowerHeaders.findIndex(h => h.includes(kw.toLowerCase()));
+                  if (idx !== -1) return headers[idx];
+              }
+              return '';
+          };
+
+          mapping.count = findHeader(['count', 'qty', 'quantity', 'amount']);
+          mapping.frontStyle = findHeader(['front style', 'front_style', 'front', 'front style id']);
+          mapping.backStyle = findHeader(['back style', 'back_style', 'back', 'back style id']);
+
+          mapping.generateIdFrom = findHeader(['name', 'card name', 'title', 'id', 'identifier']); // Added 'id' keywords here as fallback since we removed specific ID column logic
+
+          setColumnMapping(mapping);
+          setMappingModalOpen(true);
+
+      } catch (err) {
+          notifications.show({ title: 'Error reading headers', message: String(err), color: 'red' });
+      }
+  };
+
+  const performImport = async () => {
+      if (!importTarget) return;
+      setMappingModalOpen(false);
+
+      try {
+          const cards = await ImportCardsWithMapping(importTarget.path, importTarget.sheet, columnMapping);
+          if (cards) {
+             // Style Reconciliation
+             let newFrontStyles = { ...deck.frontStyles };
+             let newBackStyles = { ...deck.backStyles };
+             let stylesChanged = false;
+
+             const resolveStyle = (styleNameOrId: string, type: 'front' | 'back') => {
+                if (!styleNameOrId) return type === 'front' ? 'default-front' : 'default-back';
+
+                const styles = type === 'front' ? newFrontStyles : newBackStyles;
+
+                // 1. Check if it matches an existing ID
+                if (styles[styleNameOrId]) return styleNameOrId;
+
+                // 2. Check if it matches an existing Name (case insensitive?)
+                const foundEntry = Object.entries(styles).find(([_, s]) => s.name.toLowerCase() === styleNameOrId.toLowerCase());
+                if (foundEntry) return foundEntry[0];
+
+                // 3. Create New Style
+                const newId = `${type}-style-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+                const newStyle = { name: styleNameOrId, elements: [] };
+
+                if (type === 'front') {
+                    newFrontStyles = { ...newFrontStyles, [newId]: newStyle };
+                } else {
+                    newBackStyles = { ...newBackStyles, [newId]: newStyle };
+                }
+                stylesChanged = true;
+                return newId;
+             };
+
+             const reconciledCards = cards.map(c => ({
+                 ...c,
+                 frontStyleId: resolveStyle(c.frontStyleId, 'front'),
+                 backStyleId: resolveStyle(c.backStyleId, 'back')
+             }));
+
+             // Infer Fields
+             let fields = deck.fields;
+             if (reconciledCards.length > 0) {
+                 const allKeys = new Set<string>();
+                 deck.fields.forEach(f => allKeys.add(f.name));
+
+                 reconciledCards.forEach(c => Object.keys(c.data).forEach(k => allKeys.add(k)));
+
+                 // Update fields list if new fields found
+                 if (allKeys.size > deck.fields.length) {
+                     fields = Array.from(allKeys).map(k => {
+                         const existing = deck.fields.find(f => f.name === k);
+                         return existing || { name: k, type: 'text' };
+                     });
+                 }
+             }
+
+             setDeck({
+                 ...deck,
+                 frontStyles: stylesChanged ? newFrontStyles : deck.frontStyles,
+                 backStyles: stylesChanged ? newBackStyles : deck.backStyles,
+                 cards: reconciledCards as any,
+                 fields
+             });
+
+             notifications.show({ title: 'Success', message: `Imported ${reconciledCards.length} cards` });
+          }
+      } catch (err) {
+          notifications.show({ title: 'Import Failed', message: String(err), color: 'red' });
+      }
   };
 
   const handleExport = async () => {
@@ -133,6 +270,12 @@ export function DeckDetails({ deck, setDeck, onDeckLoad, onNavigateToHelp, onDel
                         >
                             Compact Mode
                         </Menu.Item>
+                        <Menu.Item
+                            closeMenuOnClick={false}
+                            rightSection={<Switch size="xs" checked={showRawValues} onChange={(e) => setShowRawValues(e.currentTarget.checked)} />}
+                        >
+                            Show Raw Values
+                        </Menu.Item>
                     </Menu.Dropdown>
                  </Menu>
                  <Menu shadow="md" width={200}>
@@ -141,7 +284,7 @@ export function DeckDetails({ deck, setDeck, onDeckLoad, onNavigateToHelp, onDel
                     </Menu.Target>
                     <Menu.Dropdown>
                         <Menu.Label>Excel</Menu.Label>
-                        <Menu.Item leftSection={<IconPlus size={14} />} onClick={handleImport}>Import XLSX</Menu.Item>
+                        <Menu.Item leftSection={<IconPlus size={14} />} onClick={handleImportClick}>Import XLSX</Menu.Item>
                         <Menu.Item leftSection={<IconTable size={14} />} onClick={handleExport}>Export XLSX</Menu.Item>
                     </Menu.Dropdown>
                  </Menu>
@@ -159,7 +302,7 @@ export function DeckDetails({ deck, setDeck, onDeckLoad, onNavigateToHelp, onDel
             </Tabs.List>
 
             <Tabs.Panel value="spreadsheet" pt="xs">
-              <SpreadsheetView deck={deck} setDeck={setDeck} compact={compactMode} />
+              <SpreadsheetView deck={deck} setDeck={setDeck} compact={compactMode} showRawValues={showRawValues} />
             </Tabs.Panel>
 
             <Tabs.Panel value="settings" pt="xs">
@@ -269,6 +412,79 @@ export function DeckDetails({ deck, setDeck, onDeckLoad, onNavigateToHelp, onDel
         </Stack>
       </Paper>
 
+
+      <Modal opened={sheetModalOpen} onClose={() => setSheetModalOpen(false)} title="Select Sheet to Import">
+        <Stack>
+            <Select
+                label="Sheet"
+                data={sheetSelection?.sheets || []}
+                value={selectedSheet}
+                onChange={(val) => setSelectedSheet(val || '')}
+            />
+            <Group justify="flex-end">
+                <Button variant="default" onClick={() => setSheetModalOpen(false)}>Cancel</Button>
+                <Button onClick={confirmSheetSelection}>Import</Button>
+            </Group>
+        </Stack>
+      </Modal>
+
+
+      <Modal opened={mappingModalOpen} onClose={() => setMappingModalOpen(false)} title="Map Columns" size="lg">
+          <Stack>
+              <Text size="sm" c="dimmed">Map your Excel columns to the required Card Wizard fields.</Text>
+
+              <Group grow>
+                <Select
+                    label="Auto-generate ID from"
+                    placeholder="Select column to slugify"
+                    data={excelHeaders}
+                    value={columnMapping.generateIdFrom}
+                    onChange={(val) => setColumnMapping(prev => ({ ...prev, generateIdFrom: val || '' }))}
+                    searchable
+                    clearable
+                />
+                <Select
+                    label="Count Column"
+                    placeholder="Select column for Count"
+                    data={excelHeaders}
+                    value={columnMapping.count}
+                    onChange={(val) => setColumnMapping(prev => ({ ...prev, count: val || '' }))}
+                    searchable
+                    clearable
+                />
+              </Group>
+
+              <Group grow>
+                <Select
+                    label="Front Style Column"
+                    placeholder="Select column for Front Style"
+                    data={excelHeaders}
+                    value={columnMapping.frontStyle}
+                    onChange={(val) => setColumnMapping(prev => ({ ...prev, frontStyle: val || '' }))}
+                    searchable
+                    clearable
+                />
+                <Select
+                    label="Back Style Column"
+                    placeholder="Select column for Back Style"
+                    data={excelHeaders}
+                    value={columnMapping.backStyle}
+                    onChange={(val) => setColumnMapping(prev => ({ ...prev, backStyle: val || '' }))}
+                    searchable
+                    clearable
+                />
+              </Group>
+
+              <Text size="xs" c="dimmed" mt="sm">
+                  * Unmapped columns will be imported as data fields automatically.
+              </Text>
+
+              <Group justify="flex-end" mt="md">
+                  <Button variant="default" onClick={() => setMappingModalOpen(false)}>Cancel</Button>
+                  <Button onClick={performImport}>Import Cards</Button>
+              </Group>
+          </Stack>
+      </Modal>
 
     </Container>
   );

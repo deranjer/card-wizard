@@ -14,6 +14,7 @@ type CardBack struct {
 
 type LayoutElement struct {
 	ID             string  `json:"id"`
+	Name           string  `json:"name,omitempty"`
 	Type           string  `json:"type"`
 	Field          string  `json:"field"`
 	StaticText     string  `json:"staticText,omitempty"`
@@ -46,17 +47,19 @@ type Card struct {
 }
 
 type Deck struct {
-	ID            string                `json:"id"`
-	Name          string                `json:"name"`
-	Width         float64               `json:"width"`
-	Height        float64               `json:"height"`
-	Cards         []Card                `json:"cards"`
-	Fields        []FieldDefinition     `json:"fields"`
-	FrontStyles   map[string]CardLayout `json:"frontStyles"`
-	BackStyles    map[string]CardLayout `json:"backStyles"`
-	PaperSize     string                `json:"paperSize"`     // "letter" or "a4"
-	DrawCutGuides bool                  `json:"drawCutGuides"` // Draw borders around cards
-	RenderedCards []RenderedCard        `json:"renderedCards"` // Pre-rendered card images for PDF
+	ID                  string                `json:"id"`
+	Name                string                `json:"name"`
+	Width               float64               `json:"width"`
+	Height              float64               `json:"height"`
+	Cards               []Card                `json:"cards"`
+	Fields              []FieldDefinition     `json:"fields"`
+	FrontStyles         map[string]CardLayout `json:"frontStyles"`
+	BackStyles          map[string]CardLayout `json:"backStyles"`
+	DefaultFrontStyleID string                `json:"defaultFrontStyleId"`
+	DefaultBackStyleID  string                `json:"defaultBackStyleId"`
+	PaperSize           string                `json:"paperSize"`     // "letter" or "a4"
+	DrawCutGuides       bool                  `json:"drawCutGuides"` // Draw borders around cards
+	RenderedCards       []RenderedCard        `json:"renderedCards"` // Pre-rendered card images for PDF
 }
 
 type RenderedCard struct {

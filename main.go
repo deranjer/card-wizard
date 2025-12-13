@@ -29,9 +29,10 @@ func main() {
 				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					if strings.HasPrefix(r.URL.Path, "/local-image") {
 						path := r.URL.Query().Get("path")
-						println("Local image request:", path)
 						if path != "" {
-							http.ServeFile(w, r, path)
+							// Resolve path relative to game if needed
+							resolvedPath := app.ResolveImagePath(path)
+							http.ServeFile(w, r, resolvedPath)
 							return
 						}
 						http.Error(w, "No path specified", http.StatusBadRequest)
@@ -39,7 +40,6 @@ func main() {
 					}
 					if strings.HasPrefix(r.URL.Path, "/local-font") {
 						path := r.URL.Query().Get("path")
-						println("Local font request:", path)
 						if path != "" {
 							// Set appropriate content type for fonts
 							if strings.HasSuffix(strings.ToLower(path), ".ttf") {
@@ -59,12 +59,13 @@ func main() {
 		},
 		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
 		OnStartup:        app.startup,
+		WindowStartState: options.Maximised,
 		Bind: []interface{}{
 			app,
 		},
 	})
 
 	if err != nil {
-		println("Error:", err.Error())
+		panic(err)
 	}
 }

@@ -1,6 +1,7 @@
 import { Stack, Group, Button, Text, Paper, Select, ColorInput, NumberInput, TextInput, ActionIcon, ScrollArea, SegmentedControl, Center, Switch, Slider } from '@mantine/core';
 import { Deck, CardLayout, LayoutElement } from '../types';
 import { CardRender } from './CardRender';
+import { ImageLoader } from './ImageLoader';
 import { BottomControlBar } from './BottomControlBar';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Rnd } from 'react-rnd';
@@ -17,7 +18,95 @@ interface StyleEditorProps {
 
 const MM_TO_PX = 3.7795275591;
 
-export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
+// Undo/Redo Hook
+function useHistory<T>(initialPresent: T) {
+  const [past, setPast] = useState<T[]>([]);
+  const [present, setPresent] = useState<T>(initialPresent);
+  const [future, setFuture] = useState<T[]>([]);
+
+  const canUndo = past.length > 0;
+  const canRedo = future.length > 0;
+
+  const undo = useCallback(() => {
+    if (!canUndo) return;
+    const newPresent = past[past.length - 1];
+    const newPast = past.slice(0, past.length - 1);
+
+    setFuture([present, ...future]);
+    setPresent(newPresent);
+    setPast(newPast);
+    return newPresent;
+  }, [past, present, future, canUndo]);
+
+  const redo = useCallback(() => {
+    if (!canRedo) return;
+    const newPresent = future[0];
+    const newFuture = future.slice(1);
+
+    setPast([...past, present]);
+    setPresent(newPresent);
+    setFuture(newFuture);
+    return newPresent;
+  }, [past, present, future, canRedo]);
+
+  const set = useCallback((newPresent: T) => {
+    if (newPresent === present) return;
+    setPast([...past, present]);
+    setPresent(newPresent);
+    setFuture([]);
+  }, [past, present]);
+
+  // Special setter that doesn't push to history (for initial sync or minor updates)
+  const setSilent = useCallback((newPresent: T) => {
+      setPresent(newPresent);
+  }, []);
+
+  return { present, set, setSilent, undo, redo, canUndo, canRedo, past, future };
+}
+
+export function StyleEditor({ deck: externalDeck, setDeck: setExternalDeck }: StyleEditorProps) {
+  // We use local history state, and sync to external when it changes
+  const { present: deck, set: setDeckHistory, setSilent: setDeckSilent, undo, redo, canUndo, canRedo } = useHistory(externalDeck);
+
+  // Sync external changes (e.g. from other tabs) to local state
+  // This is critical: if the deck is updated elsewhere (e.g. XLSX import in Deck Details),
+  // we need to update our local history state, otherwise we'll overwrite with stale data
+  useEffect(() => {
+      // Only update if the external deck is actually different (deep comparison would be ideal, but reference check is safer)
+      // We use setSilent to avoid creating history entries for external updates
+      if (externalDeck !== deck) {
+          setDeckSilent(externalDeck);
+      }
+  }, [externalDeck]);
+
+  // Propagate local changes to parent
+  useEffect(() => {
+      setExternalDeck(deck);
+  }, [deck]);
+
+  // Hotkeys
+  useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+          if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+              e.preventDefault();
+              if (e.shiftKey) {
+                  redo();
+              } else {
+                  undo();
+              }
+          }
+          if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+              e.preventDefault();
+              redo();
+          }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo]);
+
+  // Wrapper for setDeck to use history
+  const setDeck = setDeckHistory;
+
   const [activeTab, setActiveTab] = useState<'front' | 'back'>('front');
   const [selectedStyleId, setSelectedStyleId] = useState<string | null>(null);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
@@ -25,6 +114,17 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
   const [renderKey, setRenderKey] = useState(0);
   const [canvasReady, setCanvasReady] = useState(false);
   const [draggedPoint, setDraggedPoint] = useState<{ elementId: string, pointIndex: number } | null>(null);
+
+
+
+  const [tempStyleId, setTempStyleId] = useState('');
+
+  // Sync local state when selectedStyleId changes
+  useEffect(() => {
+    if (selectedStyleId) {
+        setTempStyleId(selectedStyleId);
+    }
+  }, [selectedStyleId]);
 
   // Live Preview State
   const [previewCardId, setPreviewCardId] = useState<string | null>(null);
@@ -75,6 +175,36 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
     }
   }, [selectedStyleId]);
 
+  // Clear preview if selected card doesn't match current style
+  useEffect(() => {
+      if (previewCardId && selectedStyleId) {
+          const card = deck.cards.find(c => c.id === previewCardId);
+          if (card) {
+              let cardStyleId = activeTab === 'front' ? card.frontStyleId : card.backStyleId;
+              const styles = activeTab === 'front' ? deck.frontStyles : deck.backStyles;
+
+               // Fallback logic matching CardRender
+              if (!cardStyleId || !styles[cardStyleId]) {
+                  const defaultId = activeTab === 'front'
+                    ? (deck.defaultFrontStyleId || 'default-front')
+                    : (deck.defaultBackStyleId || 'default-back');
+                  if (styles[defaultId]) {
+                      cardStyleId = defaultId;
+                  } else {
+                      const allIds = Object.keys(styles);
+                      if (allIds.length > 0) {
+                          cardStyleId = allIds[0];
+                      }
+                  }
+              }
+
+              if (cardStyleId !== selectedStyleId) {
+                  setPreviewCardId(null);
+              }
+          }
+      }
+  }, [selectedStyleId, activeTab, previewCardId, deck.cards, deck.frontStyles, deck.backStyles]);
+
   const currentStyle = selectedStyleId
     ? (activeTab === 'front' ? deck.frontStyles[selectedStyleId] : deck.backStyles[selectedStyleId])
     : null;
@@ -83,15 +213,17 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
     if (!selectedStyleId) return;
 
     if (activeTab === 'front') {
-        setDeck({
+        const newDeck = {
             ...deck,
             frontStyles: { ...deck.frontStyles, [selectedStyleId]: newLayout }
-        });
+        };
+        setDeck(newDeck);
     } else {
-        setDeck({
+        const newDeck = {
             ...deck,
             backStyles: { ...deck.backStyles, [selectedStyleId]: newLayout }
-        });
+        };
+        setDeck(newDeck);
     }
   };
 
@@ -103,6 +235,13 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
         points = PRESET_SHAPES.find(p => p.name === shapePreset)?.points;
     }
 
+    // Auto-detect field for images
+    let defaultField = undefined;
+    if (type === 'image') {
+        const imageField = deck.fields.find(f => f.type === 'image');
+        if (imageField) defaultField = imageField.name;
+    }
+
     const newElement: LayoutElement = {
       id: `el-${Date.now()}`,
       name: type === 'shape' && shapePreset ? shapePreset : (type === 'text' ? 'New Text' : 'New Image'),
@@ -112,6 +251,7 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
       width: type === 'text' ? 40 : 20, // mm
       height: type === 'text' ? 10 : 20, // mm
       staticText: type === 'text' ? 'New Text' : undefined,
+      field: defaultField,
       fontSize: 12,
       color: '#000000',
       points: points ? [...points] : undefined,
@@ -199,6 +339,99 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
       handleStyleChange({ ...currentStyle, name });
   };
 
+  const renameStyleId = (newId: string) => {
+      if (!selectedStyleId || !currentStyle) return;
+      if (newId === selectedStyleId) return;
+
+      // Basic validation
+      if (!/^[a-z0-9-_]+$/.test(newId)) {
+           notifications.show({ title: 'Error', message: 'ID can only contain lowercase letters, numbers, dashes and underscores.', color: 'red' });
+           return;
+      }
+
+      const styles = activeTab === 'front' ? deck.frontStyles : deck.backStyles;
+      if (styles[newId]) {
+          notifications.show({ title: 'Error', message: 'Style with this ID already exists.', color: 'red' });
+          return;
+      }
+
+      const newStyles = { ...styles };
+      newStyles[newId] = newStyles[selectedStyleId];
+      delete newStyles[selectedStyleId];
+
+      const newCards = deck.cards.map(card => {
+          if (activeTab === 'front' && card.frontStyleId === selectedStyleId) {
+                return { ...card, frontStyleId: newId };
+          }
+          if (activeTab === 'back' && card.backStyleId === selectedStyleId) {
+                return { ...card, backStyleId: newId };
+          }
+          return card;
+      });
+
+      // Update defaults
+      let newDeck = { ...deck, cards: newCards };
+      if (activeTab === 'front') {
+            newDeck.frontStyles = newStyles;
+             // Check against current implicit or explicit default
+            const currentDefault = deck.defaultFrontStyleId || 'default-front';
+            if (currentDefault === selectedStyleId) {
+                newDeck.defaultFrontStyleId = newId;
+            }
+      } else {
+            newDeck.backStyles = newStyles;
+            const currentDefault = deck.defaultBackStyleId || 'default-back';
+             if (currentDefault === selectedStyleId) {
+                newDeck.defaultBackStyleId = newId;
+            }
+      }
+
+      setDeck(newDeck);
+      setSelectedStyleId(newId);
+  };
+
+  // Alignment Helpers
+  const alignSelected = (direction: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => {
+      if (!selectedElementId || !currentStyle) return;
+
+      const element = currentStyle.elements.find(el => el.id === selectedElementId);
+      if (!element) return;
+
+      let updates: Partial<LayoutElement> = {};
+
+      // Assuming deck dimensions are in mm, card mock is probably scaled?
+      // Actually the layout stores raw values (mm usually).
+      // deck.width / deck.height are the reference.
+
+      switch (direction) {
+          case 'left':
+              updates.x = 0;
+              break;
+          case 'center':
+              updates.x = (deck.width - element.width) / 2;
+              break;
+          case 'right':
+              updates.x = deck.width - element.width;
+              break;
+          case 'top':
+              updates.y = 0;
+              break;
+          case 'middle':
+              updates.y = (deck.height - element.height) / 2;
+              break;
+          case 'bottom':
+              updates.y = deck.height - element.height;
+              break;
+      }
+      updateElement(selectedElementId, updates);
+  };
+
+  const deleteSelectedElement = () => {
+      if (selectedElementId) {
+          removeElement(selectedElementId);
+      }
+  };
+
   const deleteStyle = () => {
       if (!selectedStyleId) return;
 
@@ -238,6 +471,9 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
       setSelectedStyleId(fallbackId);
   };
 
+  // Temp points for dragging to avoid history spam
+  const [tempPoints, setTempPoints] = useState<{ id: string, points: { x: number, y: number }[] } | null>(null);
+
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
         if (!draggedPoint || !currentStyle || !canvasReady) return;
@@ -248,8 +484,10 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
         if (!canvas) return;
         const rect = canvas.getBoundingClientRect();
 
-        // Use current zoom scale
         const scale = zoom;
+
+        // Use temp points if they exist, otherwise source
+        const currentPoints = (tempPoints && tempPoints.id === el.id) ? tempPoints.points : el.points;
 
         const elX = el.x * MM_TO_PX * scale;
         const elY = el.y * MM_TO_PX * scale;
@@ -262,13 +500,20 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
         const newX = (mouseX - elX) / elW;
         const newY = (mouseY - elY) / elH;
 
-        const newPoints = [...el.points];
+        const newPoints = [...currentPoints];
         newPoints[draggedPoint.pointIndex] = { x: newX, y: newY };
-        updateElement(el.id, { points: newPoints });
+
+        // Update temp state only
+        setTempPoints({ id: el.id, points: newPoints });
     };
 
     const handleMouseUp = () => {
+        if (draggedPoint && tempPoints && tempPoints.id === draggedPoint.elementId) {
+             // Commit final state to deck (history)
+             updateElement(draggedPoint.elementId, { points: tempPoints.points });
+        }
         setDraggedPoint(null);
+        setTempPoints(null);
     };
 
     if (draggedPoint) {
@@ -279,7 +524,7 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
         window.removeEventListener('mousemove', handleMouseMove);
         window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [draggedPoint, currentStyle, zoom, canvasReady, deck]); // Dependencies include deck to ensure latest updateElement triggers
+  }, [draggedPoint, currentStyle, zoom, canvasReady, deck, tempPoints]); // Added tempPoints dependency
 
 
   if (!currentStyle) return <Text>No styles defined.</Text>;
@@ -291,7 +536,29 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
   const cardWidthPx = deck.width * MM_TO_PX * scale;
   const cardHeightPx = deck.height * MM_TO_PX * scale;
 
-  console.log("Render - canvasReady:", canvasReady, "selectedStyleId:", selectedStyleId);
+  const filteredCards = deck.cards.filter(c => {
+      if (!selectedStyleId) return true;
+
+      const styles = activeTab === 'front' ? deck.frontStyles : deck.backStyles;
+      let cardStyleId = activeTab === 'front' ? c.frontStyleId : c.backStyleId;
+
+      // Fallback logic matching CardRender
+      if (!cardStyleId || !styles[cardStyleId]) {
+          const defaultId = activeTab === 'front'
+            ? (deck.defaultFrontStyleId || 'default-front')
+            : (deck.defaultBackStyleId || 'default-back');
+          if (styles[defaultId]) {
+              cardStyleId = defaultId;
+          } else {
+              const allIds = Object.keys(styles);
+              if (allIds.length > 0) {
+                  cardStyleId = allIds[0];
+              }
+          }
+      }
+
+      return cardStyleId === selectedStyleId;
+  });
 
   return (
     <>
@@ -319,12 +586,26 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
         </Group>
 
         <Group align="flex-end">
-            <TextInput
-                label="Style Name"
-                value={currentStyle.name}
-                onChange={(e) => renameStyle(e.currentTarget.value)}
-                style={{ flex: 1 }}
-            />
+            <Stack gap="xs" style={{ flex: 1 }}>
+                <TextInput
+                    label="Style Name"
+                    value={currentStyle.name}
+                    onChange={(e) => renameStyle(e.currentTarget.value)}
+                />
+                <TextInput
+                    label="Style ID"
+                    value={tempStyleId}
+                    onChange={(e) => setTempStyleId(e.currentTarget.value)}
+                    onBlur={() => renameStyleId(tempStyleId)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            renameStyleId(tempStyleId);
+                            e.currentTarget.blur();
+                        }
+                    }}
+                    description="Lowercase, numbers, dashes only"
+                />
+            </Stack>
             <ActionIcon color="red" variant="light" onClick={deleteStyle} mb={4} title="Delete Style">
                 <IconTrash size={16} />
             </ActionIcon>
@@ -335,7 +616,7 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
             <Stack gap="xs">
                 <Select
                     placeholder="Select Card to Preview"
-                    data={deck.cards.map(c => ({
+                    data={filteredCards.map(c => ({
                         value: c.id,
                         label: c.data.name || c.id
                     }))}
@@ -363,6 +644,57 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
                         disabled={!showPreview}
                     />
                 </Stack>
+            </Stack>
+        </Paper>
+
+        <Paper withBorder p="xs" mt="md">
+            <Text size="sm" fw={500} mb="xs">Element Control</Text>
+            <Stack gap="xs">
+                {/* Alignment Tools */}
+                <Menu shadow="md" width={200}>
+                    <Menu.Target>
+                        <Button variant="light" size="xs" fullWidth leftSection={<IconAlignLeft size={14} />} disabled={!selectedElementId}>
+                            Align Element
+                        </Button>
+                    </Menu.Target>
+
+                    <Menu.Dropdown>
+                        <Menu.Label>Horizontal</Menu.Label>
+                        <Menu.Item leftSection={<IconAlignLeft size={14} />} onClick={() => alignSelected('left')}>
+                            Align Left
+                        </Menu.Item>
+                        <Menu.Item leftSection={<IconAlignCenter size={14} />} onClick={() => alignSelected('center')}>
+                            Align Center
+                        </Menu.Item>
+                        <Menu.Item leftSection={<IconAlignRight size={14} />} onClick={() => alignSelected('right')}>
+                            Align Right
+                        </Menu.Item>
+
+                        <Menu.Divider />
+
+                        <Menu.Label>Vertical</Menu.Label>
+                        <Menu.Item leftSection={<IconArrowBarUp size={14} />} onClick={() => alignSelected('top')}>
+                            Align Top
+                        </Menu.Item>
+                        <Menu.Item leftSection={<IconArrowsVertical size={14} />} onClick={() => alignSelected('middle')}>
+                            Align Middle
+                        </Menu.Item>
+                        <Menu.Item leftSection={<IconArrowBarDown size={14} />} onClick={() => alignSelected('bottom')}>
+                            Align Bottom
+                        </Menu.Item>
+                    </Menu.Dropdown>
+                </Menu>
+
+                {/* Undo/Redo */}
+                <Button.Group>
+                    <Button variant="default" size="xs" onClick={undo} disabled={!canUndo} style={{ flex: 1 }}>Undo</Button>
+                    <Button variant="default" size="xs" onClick={redo} disabled={!canRedo} style={{ flex: 1 }}>Redo</Button>
+                </Button.Group>
+
+                {/* Delete Element */}
+                <Button variant="light" size="xs" color="red" fullWidth leftSection={<IconTrash size={14} />} onClick={deleteSelectedElement} disabled={!selectedElementId}>
+                    Delete Element
+                </Button>
             </Stack>
         </Paper>
 
@@ -414,7 +746,7 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
                         left: 0,
                         width: '100%',
                         height: '100%',
-                        zIndex: 500,
+                        zIndex: 1500,
                         opacity: previewOpacity,
                         pointerEvents: 'none',
                     }}>
@@ -437,9 +769,11 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
                     return (
                     <Rnd
                         key={el.id}
-                        default={{
+                        position={{
                             x: elementX,
-                            y: elementY,
+                            y: elementY
+                        }}
+                        size={{
                             width: elementWidth,
                             height: elementHeight
                         }}
@@ -492,57 +826,57 @@ export function StyleEditor({ deck, setDeck }: StyleEditorProps) {
                                             <Text size="xs" c="dimmed">Image: {el.field}</Text>
                                             <Text size="xs" c="dimmed">({el.objectFit || 'contain'})</Text>
                                         </div>
-                                    ) : <Text size="xs" c="dimmed">Image Placeholder</Text>}
+                                    ) : el.staticText ? (
+                                        <ImageLoader
+                                            path={el.staticText}
+                                            style={{
+                                                width: '100%',
+                                                height: '100%',
+                                                objectFit: (el.objectFit as any) || 'contain',
+                                            }}
+                                        />
+                                    ) : (
+                                        <div style={{ padding: 4, textAlign: 'center' }}>
+                                            <Text size="xs" c="red" fw={500}>No Data Source</Text>
+                                            <Text size="xs" c="dimmed">Select field below</Text>
+                                        </div>
+                                    )}
                                 </div>
-                            ) : el.type === 'shape' && el.points ? (
-                                <svg
-                                    width="100%"
-                                    height="100%"
-                                    viewBox="0 0 100 100"
-                                    preserveAspectRatio="none"
-                                    style={{ overflow: 'visible' }}
-                                >
-                                    <polygon
-                                        points={el.points.map(p => `${p.x * 100},${p.y * 100}`).join(' ')}
-                                        fill={el.fillColor || '#cccccc'}
-                                        stroke={el.strokeColor || 'none'}
-                                        strokeWidth={el.strokeWidth || 0}
-                                        vectorEffect="non-scaling-stroke"
-                                    />
-                                </svg>
-                            ) : (
+                             ) : el.type === 'shape' && el.points ? (
+                     <svg
+                        width="100%"
+                        height="100%"
+                        viewBox="0 0 100 100"
+                        preserveAspectRatio="none"
+                        style={{ overflow: 'visible' }}
+                     >
+                       <polygon
+                          points={((tempPoints && tempPoints.id === el.id) ? tempPoints.points : el.points).map(p => `${p.x * 100},${p.y * 100}`).join(' ')}
+                          fill={el.fillColor || '#cccccc'}
+                          stroke={el.strokeColor || 'none'}
+                          strokeWidth={el.strokeWidth || 0}
+                          vectorEffect="non-scaling-stroke"
+                       />
+                       {/* Render Resize Handles for Points */}
+                       {selectedElementId === el.id && ((tempPoints && tempPoints.id === el.id) ? tempPoints.points : el.points).map((p, i) => (
+                          <circle
+                            key={i}
+                            cx={p.x * 100}
+                            cy={p.y * 100}
+                            r={3}
+                            fill="red"
+                            style={{ cursor: 'crosshair', pointerEvents: 'all' }}
+                            onMouseDown={(e) => {
+                                e.stopPropagation();
+                                setDraggedPoint({ elementId: el.id, pointIndex: i });
+                            }}
+                          />
+                       ))}
+                     </svg>
+                  ) : (
                                 el.field ? `{${el.field}}` : el.staticText
                             )}
                         </div>
-                        {/* Point Editing Handles */}
-                        {selectedElementId === el.id && el.type === 'shape' && el.points && (
-                            <>
-                                {el.points.map((p, i) => (
-                                    <div
-                                        key={i}
-                                        style={{
-                                            position: 'absolute',
-                                            left: `${p.x * 100}%`,
-                                            top: `${p.y * 100}%`,
-                                            width: 10,
-                                            height: 10,
-                                            backgroundColor: '#228be6',
-                                            border: '1px solid white',
-                                            borderRadius: '50%',
-                                            transform: 'translate(-50%, -50%)',
-                                            cursor: 'crosshair',
-                                            pointerEvents: 'auto', // Re-enable pointer events for handles
-                                            zIndex: 1001
-                                        }}
-                                        onMouseDown={(e) => {
-                                            e.stopPropagation();
-                                            e.preventDefault();
-                                            setDraggedPoint({ elementId: el.id, pointIndex: i });
-                                        }}
-                                    />
-                                ))}
-                            </>
-                        )}
                     </Rnd>
                     );
                 })}

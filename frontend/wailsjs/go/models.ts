@@ -45,6 +45,7 @@ export namespace deck {
 	}
 	export class LayoutElement {
 	    id: string;
+	    name?: string;
 	    type: string;
 	    field: string;
 	    staticText?: string;
@@ -69,6 +70,7 @@ export namespace deck {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
+	        this.name = source["name"];
 	        this.type = source["type"];
 	        this.field = source["field"];
 	        this.staticText = source["staticText"];
@@ -158,6 +160,8 @@ export namespace deck {
 	    fields: FieldDefinition[];
 	    frontStyles: Record<string, CardLayout>;
 	    backStyles: Record<string, CardLayout>;
+	    defaultFrontStyleId: string;
+	    defaultBackStyleId: string;
 	    paperSize: string;
 	    drawCutGuides: boolean;
 	    renderedCards: RenderedCard[];
@@ -176,6 +180,8 @@ export namespace deck {
 	        this.fields = this.convertValues(source["fields"], FieldDefinition);
 	        this.frontStyles = this.convertValues(source["frontStyles"], CardLayout, true);
 	        this.backStyles = this.convertValues(source["backStyles"], CardLayout, true);
+	        this.defaultFrontStyleId = source["defaultFrontStyleId"];
+	        this.defaultBackStyleId = source["defaultBackStyleId"];
 	        this.paperSize = source["paperSize"];
 	        this.drawCutGuides = source["drawCutGuides"];
 	        this.renderedCards = this.convertValues(source["renderedCards"], RenderedCard);
@@ -265,6 +271,25 @@ export namespace game {
 		    }
 		    return a;
 		}
+	}
+
+}
+
+export namespace main {
+
+	export class ExcelSelection {
+	    filePath: string;
+	    sheets: string[];
+
+	    static createFrom(source: any = {}) {
+	        return new ExcelSelection(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.filePath = source["filePath"];
+	        this.sheets = source["sheets"];
+	    }
 	}
 
 }

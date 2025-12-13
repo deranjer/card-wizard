@@ -3,20 +3,21 @@ import { IconTrash, IconPlus, IconPhoto, IconFolder } from '@tabler/icons-react'
 import { Deck, Card, FieldDefinition } from '../types';
 import { useState, useRef, useEffect } from 'react';
 import { notifications } from '@mantine/notifications';
-import { SelectImageFile } from '../../wailsjs/go/main/App';
+import { SelectImageFile, AddProjectImage } from '../../wailsjs/go/main/App';
 import { ImageLoader } from './ImageLoader';
 
 interface SpreadsheetViewProps {
   deck: Deck;
   setDeck: (deck: Deck) => void;
   compact?: boolean;
+  showRawValues?: boolean;
 }
 
 interface ColumnWidths {
   [key: string]: number;
 }
 
-export function SpreadsheetView({ deck, setDeck, compact = false }: SpreadsheetViewProps) {
+export function SpreadsheetView({ deck, setDeck, compact = false, showRawValues = false }: SpreadsheetViewProps) {
   const [newFieldName, setNewFieldName] = useState('');
   const [newFieldType, setNewFieldType] = useState<string | null>('text');
   const [isAddingField, setIsAddingField] = useState(false);
@@ -140,7 +141,20 @@ export function SpreadsheetView({ deck, setDeck, compact = false }: SpreadsheetV
     try {
       const path = await SelectImageFile();
       if (path) {
-        updateCardData(index, fieldName, path);
+        // Try to add to project assets
+        try {
+          const relativePath = await AddProjectImage(path);
+          updateCardData(index, fieldName, relativePath);
+        } catch (copyErr) {
+          console.error("Failed to copy image to project:", copyErr);
+          notifications.show({
+            title: 'Warning',
+            message: 'Could not copy image to project folder. Using absolute path.',
+            color: 'yellow'
+          });
+          // Fallback to absolute path if copy fails
+          updateCardData(index, fieldName, path);
+        }
       }
     } catch (err) {
       console.error(err);
@@ -161,8 +175,19 @@ export function SpreadsheetView({ deck, setDeck, compact = false }: SpreadsheetV
     }
   }
 
-  const frontStyleOptions = Object.keys(deck.frontStyles).map(id => ({ value: id, label: deck.frontStyles[id].name }));
-  const backStyleOptions = Object.keys(deck.backStyles).map(id => ({ value: id, label: deck.backStyles[id].name }));
+  const defaultFrontId = deck.defaultFrontStyleId || 'default-front';
+  const defaultFrontName = deck.frontStyles[defaultFrontId]?.name || 'Default Front';
+  const frontStyleOptions = [
+      { value: '', label: `Default - (${defaultFrontName})` },
+      ...Object.keys(deck.frontStyles).map(id => ({ value: id, label: deck.frontStyles[id].name }))
+  ];
+
+  const defaultBackId = deck.defaultBackStyleId || 'default-back';
+  const defaultBackName = deck.backStyles[defaultBackId]?.name || 'Default Back';
+  const backStyleOptions = [
+      { value: '', label: `Default - (${defaultBackName})` },
+      ...Object.keys(deck.backStyles).map(id => ({ value: id, label: deck.backStyles[id].name }))
+  ];
 
   const getImageSrc = (path: string) => {
     if (!path) return '';
@@ -307,7 +332,7 @@ export function SpreadsheetView({ deck, setDeck, compact = false }: SpreadsheetV
           </Table.Thead>
           <Table.Tbody>
             {deck.cards.map((card, index) => (
-              <Table.Tr key={card.id}>
+              <Table.Tr key={index}>
                 <Table.Td>
                   <TextInput
                     value={card.id}
@@ -341,27 +366,49 @@ export function SpreadsheetView({ deck, setDeck, compact = false }: SpreadsheetV
                     />
                 </Table.Td>
                 <Table.Td>
-                    <Select
-                        data={frontStyleOptions}
-                        value={card.frontStyleId || 'default-front'}
-                        onChange={(val) => updateCardMeta(index, 'frontStyleId', val)}
-                        size={inputSize}
-                        variant="unstyled"
-                        styles={{ input: { paddingLeft: compact ? 4 : undefined, paddingRight: compact ? 4 : undefined } }}
-                    />
+                    {showRawValues ? (
+                        <TextInput
+                            value={card.frontStyleId || ''}
+                            onChange={(e) => updateCardMeta(index, 'frontStyleId', e.currentTarget.value)}
+                            variant="unstyled"
+                            size={inputSize}
+                            styles={{ input: { paddingLeft: compact ? 4 : undefined, paddingRight: compact ? 4 : undefined, color: !card.frontStyleId ? '#adb5bd' : undefined } }}
+                            placeholder="default-front"
+                        />
+                    ) : (
+                        <Select
+                            data={frontStyleOptions}
+                            value={card.frontStyleId || ''}
+                            onChange={(val) => updateCardMeta(index, 'frontStyleId', val)}
+                            size={inputSize}
+                            variant="unstyled"
+                            styles={{ input: { paddingLeft: compact ? 4 : undefined, paddingRight: compact ? 4 : undefined } }}
+                        />
+                    )}
                 </Table.Td>
                 <Table.Td>
-                    <Select
-                        data={backStyleOptions}
-                        value={card.backStyleId || 'default-back'}
-                        onChange={(val) => updateCardMeta(index, 'backStyleId', val)}
-                        size={inputSize}
-                        variant="unstyled"
-                        styles={{ input: { paddingLeft: compact ? 4 : undefined, paddingRight: compact ? 4 : undefined } }}
-                    />
+                    {showRawValues ? (
+                        <TextInput
+                            value={card.backStyleId || ''}
+                            onChange={(e) => updateCardMeta(index, 'backStyleId', e.currentTarget.value)}
+                            variant="unstyled"
+                            size={inputSize}
+                            styles={{ input: { paddingLeft: compact ? 4 : undefined, paddingRight: compact ? 4 : undefined, color: !card.backStyleId ? '#adb5bd' : undefined } }}
+                            placeholder="default-back"
+                        />
+                    ) : (
+                        <Select
+                            data={backStyleOptions}
+                            value={card.backStyleId || ''}
+                            onChange={(val) => updateCardMeta(index, 'backStyleId', val)}
+                            size={inputSize}
+                            variant="unstyled"
+                            styles={{ input: { paddingLeft: compact ? 4 : undefined, paddingRight: compact ? 4 : undefined } }}
+                        />
+                    )}
                 </Table.Td>
                 {deck.fields.map(field => (
-                  <Table.Td key={`${card.id}-${field.name}`}>
+                  <Table.Td key={`${index}-${field.name}`}>
                     {field.type === 'text' ? (
                       <TextInput
                         value={card.data[field.name] || ''}

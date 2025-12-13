@@ -149,6 +149,24 @@ export function Help({ section }: HelpProps) {
             </div>
 
             <div>
+              <Title order={4} size="h5">Asset Gallery</Title>
+              <Text mb="xs">
+                  The Asset Gallery allows you to manage images for your project:
+              </Text>
+              <List>
+                <List.Item>
+                  <strong>Add Images:</strong> Upload images to the project-specific gallery.
+                </List.Item>
+                <List.Item>
+                  <strong>Replace Images:</strong> Update an image's content without breaking existing links in your styles.
+                </List.Item>
+                <List.Item>
+                   <strong>Usage:</strong> When adding an Image element, you can select "Static Image" and choose from the gallery.
+                </List.Item>
+              </List>
+            </div>
+
+            <div>
               <Title order={4} size="h5">Managing Styles</Title>
               <List>
                 <List.Item>
@@ -158,7 +176,13 @@ export function Help({ section }: HelpProps) {
                   <strong>Duplicate Style:</strong> Copy an existing style as a starting point for a new design.
                 </List.Item>
                 <List.Item>
-                  <strong>Delete Style:</strong> Remove unused styles (default styles cannot be deleted).
+                  <strong>Delete Style:</strong> Remove unused styles.
+                </List.Item>
+                <List.Item>
+                  <strong>Default Styles:</strong> Each deck has a default front and back style. You can rename the ID of these styles (e.g. from <code>default-front</code> to <code>standard-front</code>) in the Style Editor, and they will remain the default.
+                </List.Item>
+                <List.Item>
+                  <strong>Style IDs:</strong> You can rename the internal ID of a style to something more readable (e.g., <code>bronze-back</code>).
                 </List.Item>
               </List>
             </div>
@@ -241,6 +265,9 @@ export function Help({ section }: HelpProps) {
                 </List.Item>
                 <List.Item>
                   <strong>Style Application:</strong> Cards display with their assigned front and back styles.
+                </List.Item>
+                <List.Item>
+                  <strong>Live Preview Overlay:</strong> In the Style Editor, you can select a specific card to overlay on the canvas. Use the opacity slider to check alignment against regular card data.
                 </List.Item>
               </List>
             </div>

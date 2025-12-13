@@ -2,6 +2,7 @@ import { Paper, Group, Stack, Text, Select, TextInput, NumberInput, ColorInput, 
 import { IconBold, IconItalic, IconUnderline, IconAlignLeft, IconAlignCenter, IconAlignRight, IconArrowBarUp, IconArrowBarDown, IconArrowsVertical, IconTrash, IconCopy } from '@tabler/icons-react';
 import { LayoutElement, Deck } from '../types';
 import { useState } from 'react';
+import { AssetGallery } from './AssetGallery';
 
 interface BottomControlBarProps {
     selectedElement: LayoutElement | null | undefined;
@@ -14,14 +15,17 @@ interface BottomControlBarProps {
 
 export function BottomControlBar({ selectedElement, updateElement, removeElement, duplicateElement, deck, currentStyleId }: BottomControlBarProps) {
     const [copyModalOpen, setCopyModalOpen] = useState(false);
+    const [galleryModalOpen, setGalleryModalOpen] = useState(false);
     const [selectedTargetStyles, setSelectedTargetStyles] = useState<string[]>([]);
 
     if (!selectedElement) return null;
 
+    const isFrontStyle = currentStyleId in deck.frontStyles;
+
     const allStyles = [
         ...Object.entries(deck.frontStyles).map(([id, s]) => ({ ...s, id, type: 'Front' })),
         ...Object.entries(deck.backStyles).map(([id, s]) => ({ ...s, id, type: 'Back' }))
-    ].filter(s => s.id !== currentStyleId); // Exclude current style
+    ].filter(s => s.id !== currentStyleId && s.type === (isFrontStyle ? 'Front' : 'Back'));
 
     const handleCopy = () => {
         duplicateElement(selectedElement.id, selectedTargetStyles);
@@ -59,8 +63,8 @@ export function BottomControlBar({ selectedElement, updateElement, removeElement
                 <Stack gap="xs" style={{ width: 200 }}>
                     <Text size="sm" fw={500}>Data Source</Text>
                      <Select
-                        placeholder="Static Text"
-                        data={[{ value: '', label: 'Static Text' }, ...deck.fields.map(f => ({ value: f.name, label: f.name }))]}
+                        placeholder={selectedElement.type === 'image' ? 'Static Image' : 'Static Text'}
+                        data={[{ value: '', label: selectedElement.type === 'image' ? 'Static Image' : 'Static Text' }, ...deck.fields.map(f => ({ value: f.name, label: f.name }))]}
                         value={selectedElement.field || ''}
                         onChange={(val) => updateElement(selectedElement.id, { field: val || undefined })}
                         size="xs"
@@ -72,6 +76,18 @@ export function BottomControlBar({ selectedElement, updateElement, removeElement
                             onChange={(e) => updateElement(selectedElement.id, { staticText: e.currentTarget.value })}
                             size="xs"
                         />
+                    )}
+                    {!selectedElement.field && selectedElement.type === 'image' && (
+                        <Group gap={4}>
+                            <TextInput
+                                placeholder="Image Path"
+                                value={selectedElement.staticText || ''}
+                                onChange={(e) => updateElement(selectedElement.id, { staticText: e.currentTarget.value })}
+                                size="xs"
+                                style={{ flex: 1 }}
+                            />
+                            <Button size="xs" variant="light" onClick={() => setGalleryModalOpen(true)}>Select</Button>
+                        </Group>
                     )}
                 </Stack>
                 )}
@@ -224,7 +240,7 @@ export function BottomControlBar({ selectedElement, updateElement, removeElement
                 </Stack>
             </Group>
 
-            <Modal opened={copyModalOpen} onClose={() => setCopyModalOpen(false)} title="Copy Element to Other Styles">
+            <Modal opened={copyModalOpen} onClose={() => setCopyModalOpen(false)} title="Copy Element to Other Styles" zIndex={2000}>
                 <Stack>
                     <Text size="sm">Select styles to copy this element to:</Text>
 
@@ -262,6 +278,15 @@ export function BottomControlBar({ selectedElement, updateElement, removeElement
                         <Button onClick={handleCopy} disabled={selectedTargetStyles.length === 0}>Copy</Button>
                     </Group>
                 </Stack>
+            </Modal>
+
+            <Modal opened={galleryModalOpen} onClose={() => setGalleryModalOpen(false)} title="Select Image" size="xl" zIndex={2000}>
+                <div style={{ height: '60vh' }}>
+                    <AssetGallery onSelect={(filename) => {
+                        updateElement(selectedElement.id, { field: undefined, staticText: `images/${filename}` });
+                        setGalleryModalOpen(false);
+                    }} />
+                </div>
             </Modal>
         </Paper>
     );

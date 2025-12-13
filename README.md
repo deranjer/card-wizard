@@ -11,19 +11,19 @@ Card Wizard is organized by "games" which are collections of decks. Each deck ha
 
 ## ✨ Features
 
-- **Spreadsheet Integration**: Import card data directly from Excel (`.xlsx`) files or edit data within the app using the built-in spreadsheet view.
-  (Currently only supports importing, since there are custom field formats that are created on import so exporting and reimporting is not supported)
+- **Spreadsheet Integration**: Import and export card data directly from Excel (`.xlsx`) files or edit data within the app using the built-in spreadsheet view.
 - **Visual Style Editor**: Design your card layouts using a drag-and-drop interface. Create unique styles for different card types (e.g., "Unit", "Spell", "Event").
+- **Alignment Tools**: Quickly align elements to left, center, right, top, middle, or bottom of the card.
+- **Undo/Redo**: Full undo/redo support in the Style Editor for all element modifications.
 - **Layer Management**: Organize card elements into layers for easy management and reordering.
 - **Shape Editor**: Create and edit basic shapes for card elements.
 - **Dynamic Rendering**: Map spreadsheet columns to text and image elements on your cards.
 - **Real-time Preview**: See exactly how your deck will look before printing.
-- **Print-Ready PDF Export**: Generate high-quality PDFs with:
-  - Configurable page sizes (A4, Letter).
-  - Automatic duplex layout (fronts and backs aligned).
-  - Cut lines and safe margins.
-- **Custom Fonts**: Load and use your own font files.
-- **Cross-Platform**: Built with Wails, running natively on Windows/Mac/Linux (Only Windows has been tested).
+- **Export Options**:
+  - **Print-Ready PDF**: Generate high-quality PDFs with configurable page sizes (A4, Letter), automatic duplex layout, cut lines and safe margins.
+  - **Image Export**: Export all cards as individual PNG files (front and back).
+  - **Multi-Deck Excel**: Export entire games to Excel with each deck as a separate sheet.
+- **Asset Gallery**: Manage project-specific images with bulk upload, replace, and delete capabilities.
 - **In App Help**: Access help documentation directly from the application.
 
 

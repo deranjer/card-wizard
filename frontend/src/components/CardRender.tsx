@@ -13,9 +13,27 @@ interface CardRenderProps {
 const MM_TO_PX = 3.7795275591;
 
 export function CardRender({ card, deck, mode, scale = 1, border = true, className }: CardRenderProps) {
-  const styleId = mode === 'front' ? card.frontStyleId : card.backStyleId;
   const styles = mode === 'front' ? deck.frontStyles : deck.backStyles;
-  const layout: CardLayout = styles[styleId] || { name: 'default', elements: [] };
+  // Determine effective style ID
+  let effectiveStyleId = mode === 'front' ? card.frontStyleId : card.backStyleId;
+
+  // Fallback to default if ID is missing
+  if (!effectiveStyleId || !styles[effectiveStyleId]) {
+    const defaultId = mode === 'front'
+        ? (deck.defaultFrontStyleId || 'default-front')
+        : (deck.defaultBackStyleId || 'default-back');
+    if (styles[defaultId]) {
+        effectiveStyleId = defaultId;
+    } else {
+        // Fallback to first available style
+        const allIds = Object.keys(styles);
+        if (allIds.length > 0) {
+            effectiveStyleId = allIds[0];
+        }
+    }
+  }
+
+  const layout: CardLayout = styles[effectiveStyleId] || { name: 'default', elements: [] };
 
   return (
     <div
@@ -56,6 +74,15 @@ export function CardRender({ card, deck, mode, scale = 1, border = true, classNa
             el.field && card.data[el.field] ? (
               <ImageLoader
                 path={card.data[el.field]}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: (el.objectFit as any) || 'contain',
+                }}
+              />
+            ) : el.staticText ? (
+              <ImageLoader
+                path={el.staticText}
                 style={{
                   width: '100%',
                   height: '100%',
