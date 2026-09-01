@@ -22,6 +22,11 @@ jobs:
           check-latest: true
           cache: true
 
+      # main.go has `//go:embed all:frontend/dist`; a placeholder keeps a
+      # standalone Go build/test happy without building the real frontend.
+      - name: Stub embed dir
+        run: mkdir -p frontend/dist && echo '<!-- ci stub -->' > frontend/dist/index.html
+
       # Explicit package list (not ./...) so Go never descends into
       # frontend/node_modules, which vendors a stray flatted/*.go package.
       - name: Build
