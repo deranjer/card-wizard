@@ -8,14 +8,14 @@ import {
   Stack,
   Text,
   Modal,
-  NumberInput,
 } from '@mantine/core';
-import { IconTrash, IconPlus, IconFolder } from '@tabler/icons-react';
+import { IconTrash, IconPlus } from '@tabler/icons-react';
 import { Deck, Card, FieldDefinition } from '../types';
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { notifications } from '@mantine/notifications';
 import { SelectImageFile, AddProjectImage } from '../../wailsjs/go/main/App';
-import { ImageLoader } from './ImageLoader';
+import { ResizableHeaderCell } from './spreadsheet/ResizableHeaderCell';
+import { SheetRow } from './spreadsheet/SheetRow';
 
 interface SpreadsheetViewProps {
   deck: Deck;
@@ -24,9 +24,10 @@ interface SpreadsheetViewProps {
   showRawValues?: boolean;
 }
 
-interface ColumnWidths {
-  [key: string]: number;
-}
+type ColumnWidths = Record<string, number>;
+
+const DEFAULT_WIDTHS: ColumnWidths = { id: 100, count: 80, frontStyle: 150, backStyle: 150 };
+const fieldKey = (name: string) => `field_${name}`;
 
 export function SpreadsheetView({
   deck,
@@ -34,136 +35,93 @@ export function SpreadsheetView({
   compact = false,
   showRawValues = false,
 }: SpreadsheetViewProps) {
+  // Keep the latest deck reachable from stable callbacks so the per-row
+  // handlers never need to be re-created (which would defeat SheetRow's memo).
+  const deckRef = useRef(deck);
+  deckRef.current = deck;
+
   const [newFieldName, setNewFieldName] = useState('');
   const [newFieldType, setNewFieldType] = useState<string | null>('text');
   const [isAddingField, setIsAddingField] = useState(false);
-  const [columnWidths, setColumnWidths] = useState<ColumnWidths>({
-    id: 100,
-    count: 80,
-    frontStyle: 150,
-    backStyle: 150,
-  });
+  const [columnWidths, setColumnWidths] = useState<ColumnWidths>(DEFAULT_WIDTHS);
   const [resizing, setResizing] = useState<{
     column: string;
     startX: number;
     startWidth: number;
   } | null>(null);
 
-  // Column resizing handlers
-  const handleResizeStart = (column: string, e: React.MouseEvent) => {
+  // --- column resize -------------------------------------------------------
+  const widthsRef = useRef(columnWidths);
+  widthsRef.current = columnWidths;
+
+  const handleResizeStart = useCallback((column: string, e: React.MouseEvent) => {
     e.preventDefault();
-    const currentWidth = columnWidths[column] || 150;
-    setResizing({ column, startX: e.clientX, startWidth: currentWidth });
-  };
+    setResizing({ column, startX: e.clientX, startWidth: widthsRef.current[column] || 150 });
+  }, []);
 
-  const handleResizeMove = (e: MouseEvent) => {
-    if (!resizing) return;
-    const delta = e.clientX - resizing.startX;
-    const newWidth = Math.max(50, resizing.startWidth + delta);
-    setColumnWidths((prev) => ({ ...prev, [resizing.column]: newWidth }));
-  };
-
-  const handleResizeEnd = () => {
-    setResizing(null);
-  };
-
-  // Add/remove global mouse event listeners for resizing
   useEffect(() => {
-    if (resizing) {
-      document.addEventListener('mousemove', handleResizeMove);
-      document.addEventListener('mouseup', handleResizeEnd);
-      return () => {
-        document.removeEventListener('mousemove', handleResizeMove);
-        document.removeEventListener('mouseup', handleResizeEnd);
-      };
-    }
+    if (!resizing) return;
+    const onMove = (e: MouseEvent) => {
+      const next = Math.max(50, resizing.startWidth + (e.clientX - resizing.startX));
+      setColumnWidths((prev) => ({ ...prev, [resizing.column]: next }));
+    };
+    const onUp = () => setResizing(null);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
   }, [resizing]);
 
-  const addField = () => {
-    if (!newFieldName) return;
-    if (deck.fields.some((f) => f.name === newFieldName)) {
-      notifications.show({ title: 'Error', message: 'Field already exists', color: 'red' });
-      return;
-    }
+  // --- mutations (all id-keyed and referentially stable) ------------------
+  const replaceCards = useCallback(
+    (cards: Card[]) => setDeck({ ...deckRef.current, cards }),
+    [setDeck]
+  );
 
-    const newField: FieldDefinition = {
-      name: newFieldName,
-      type: (newFieldType as 'text' | 'image') || 'text',
-    };
+  const patchCard = useCallback(
+    (cardId: string, patch: (c: Card) => Card) => {
+      replaceCards(deckRef.current.cards.map((c) => (c.id === cardId ? patch(c) : c)));
+    },
+    [replaceCards]
+  );
 
-    setDeck({
-      ...deck,
-      fields: [...deck.fields, newField],
-    });
-    setNewFieldName('');
-    setIsAddingField(false);
-  };
+  const onChangeId = useCallback(
+    (cardId: string, nextId: string) => {
+      if (nextId !== '' && deckRef.current.cards.some((c) => c.id !== cardId && c.id === nextId)) {
+        notifications.show({ title: 'Error', message: 'Card ID must be unique', color: 'red' });
+        return;
+      }
+      patchCard(cardId, (c) => ({ ...c, id: nextId }));
+    },
+    [patchCard]
+  );
 
-  const removeField = (fieldName: string) => {
-    if (confirm(`Are you sure you want to delete the field "${fieldName}"? Data will be lost.`)) {
-      const updatedCards = deck.cards.map((card) => {
-        const newData = { ...card.data };
-        delete newData[fieldName];
-        return { ...card, data: newData };
-      });
+  const onChangeMeta = useCallback(
+    (cardId: string, field: keyof Card, value: unknown) =>
+      patchCard(cardId, (c) => ({ ...c, [field]: value })),
+    [patchCard]
+  );
 
-      setDeck({
-        ...deck,
-        fields: deck.fields.filter((f) => f.name !== fieldName),
-        cards: updatedCards,
-      });
-    }
-  };
+  const onChangeData = useCallback(
+    (cardId: string, field: string, value: unknown) =>
+      patchCard(cardId, (c) => ({ ...c, data: { ...c.data, [field]: value } })),
+    [patchCard]
+  );
 
-  const addCard = () => {
-    const newCard: Card = {
-      id: `card-${deck.cards.length + 1}`,
-      data: {},
-      count: 1,
-      frontStyleId: 'default-front',
-      backStyleId: 'default-back',
-    };
-    setDeck({
-      ...deck,
-      cards: [...deck.cards, newCard],
-    });
-  };
+  const onRemove = useCallback(
+    (cardId: string) => replaceCards(deckRef.current.cards.filter((c) => c.id !== cardId)),
+    [replaceCards]
+  );
 
-  const removeCard = (index: number) => {
-    const newCards = [...deck.cards];
-    newCards.splice(index, 1);
-    setDeck({ ...deck, cards: newCards });
-  };
-
-  const updateCardData = (index: number, field: string, value: any) => {
-    const newCards = [...deck.cards];
-    newCards[index] = {
-      ...newCards[index],
-      data: {
-        ...newCards[index].data,
-        [field]: value,
-      },
-    };
-    setDeck({ ...deck, cards: newCards });
-  };
-
-  const updateCardMeta = (index: number, field: keyof Card, value: any) => {
-    const newCards = [...deck.cards];
-    newCards[index] = {
-      ...newCards[index],
-      [field]: value,
-    };
-    setDeck({ ...deck, cards: newCards });
-  };
-
-  const handleSelectImage = async (index: number, fieldName: string) => {
-    try {
-      const path = await SelectImageFile();
-      if (path) {
-        // Try to add to project assets
+  const onSelectImage = useCallback(
+    async (cardId: string, field: string) => {
+      try {
+        const path = await SelectImageFile();
+        if (!path) return;
         try {
-          const relativePath = await AddProjectImage(path);
-          updateCardData(index, fieldName, relativePath);
+          onChangeData(cardId, field, await AddProjectImage(path));
         } catch (copyErr) {
           console.error('Failed to copy image to project:', copyErr);
           notifications.show({
@@ -171,44 +129,80 @@ export function SpreadsheetView({
             message: 'Could not copy image to project folder. Using absolute path.',
             color: 'yellow',
           });
-          // Fallback to absolute path if copy fails
-          updateCardData(index, fieldName, path);
+          onChangeData(cardId, field, path);
         }
+      } catch (err) {
+        console.error(err);
+        notifications.show({ title: 'Error', message: 'Failed to select image', color: 'red' });
       }
-    } catch (err) {
-      console.error(err);
-      notifications.show({ title: 'Error', message: 'Failed to select image', color: 'red' });
-    }
+    },
+    [onChangeData]
+  );
+
+  const addCard = () => {
+    const n = deck.cards.length + 1;
+    const newCard: Card = {
+      id: `card-${n}`,
+      data: {},
+      count: 1,
+      frontStyleId: 'default-front',
+      backStyleId: 'default-back',
+    };
+    setDeck({ ...deck, cards: [...deck.cards, newCard] });
   };
 
-  // Ensure we have at least one field to show something
-  if (deck.fields.length === 0 && deck.cards.length > 0) {
-    // Auto-discover fields from first card if fields are empty (migration)
-    const discoveredFields = Object.keys(deck.cards[0].data).map((key) => ({
-      name: key,
-      type: 'text' as const,
-    }));
-    if (discoveredFields.length > 0) {
-      // We can't update state during render, so this is a bit tricky.
-      // Ideally, this should be done on load. For now, let's just render them.
+  const addField = () => {
+    if (!newFieldName) return;
+    if (deck.fields.some((f) => f.name === newFieldName)) {
+      notifications.show({ title: 'Error', message: 'Field already exists', color: 'red' });
+      return;
     }
-  }
+    const newField: FieldDefinition = {
+      name: newFieldName,
+      type: (newFieldType as 'text' | 'image') || 'text',
+    };
+    setDeck({ ...deck, fields: [...deck.fields, newField] });
+    setNewFieldName('');
+    setIsAddingField(false);
+  };
 
-  const defaultFrontId = deck.defaultFrontStyleId || 'default-front';
-  const defaultFrontName = deck.frontStyles[defaultFrontId]?.name || 'Default Front';
-  const frontStyleOptions = [
-    { value: '', label: `Default - (${defaultFrontName})` },
-    ...Object.keys(deck.frontStyles).map((id) => ({ value: id, label: deck.frontStyles[id].name })),
-  ];
+  const removeField = useCallback(
+    (name: string) => {
+      if (!confirm(`Are you sure you want to delete the field "${name}"? Data will be lost.`))
+        return;
+      const d = deckRef.current;
+      setDeck({
+        ...d,
+        fields: d.fields.filter((f) => f.name !== name),
+        cards: d.cards.map((card) => {
+          const data = { ...card.data };
+          delete data[name];
+          return { ...card, data };
+        }),
+      });
+    },
+    [setDeck]
+  );
 
-  const defaultBackId = deck.defaultBackStyleId || 'default-back';
-  const defaultBackName = deck.backStyles[defaultBackId]?.name || 'Default Back';
-  const backStyleOptions = [
-    { value: '', label: `Default - (${defaultBackName})` },
-    ...Object.keys(deck.backStyles).map((id) => ({ value: id, label: deck.backStyles[id].name })),
-  ];
+  // --- derived (stable across cell edits) --------------------------------
+  const frontStyleOptions = useMemo(() => {
+    const id = deck.defaultFrontStyleId || 'default-front';
+    const name = deck.frontStyles[id]?.name || 'Default Front';
+    return [
+      { value: '', label: `Default - (${name})` },
+      ...Object.keys(deck.frontStyles).map((k) => ({ value: k, label: deck.frontStyles[k].name })),
+    ];
+  }, [deck.frontStyles, deck.defaultFrontStyleId]);
 
-  const inputSize = compact ? 'xs' : 'sm';
+  const backStyleOptions = useMemo(() => {
+    const id = deck.defaultBackStyleId || 'default-back';
+    const name = deck.backStyles[id]?.name || 'Default Back';
+    return [
+      { value: '', label: `Default - (${name})` },
+      ...Object.keys(deck.backStyles).map((k) => ({ value: k, label: deck.backStyles[k].name })),
+    ];
+  }, [deck.backStyles, deck.defaultBackStyleId]);
+
   const tableVerticalSpacing = compact ? 2 : 'xs';
 
   return (
@@ -232,326 +226,83 @@ export function SpreadsheetView({
         >
           <Table.Thead>
             <Table.Tr>
-              <Table.Th style={{ width: columnWidths.id || 100, position: 'relative' }}>
-                <div
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+              <ResizableHeaderCell
+                columnKey="id"
+                width={columnWidths.id || 100}
+                active={resizing?.column === 'id'}
+                onResizeStart={handleResizeStart}
+              >
+                ID
+              </ResizableHeaderCell>
+              <ResizableHeaderCell
+                columnKey="count"
+                width={columnWidths.count || 80}
+                active={resizing?.column === 'count'}
+                onResizeStart={handleResizeStart}
+              >
+                Count
+              </ResizableHeaderCell>
+              <ResizableHeaderCell
+                columnKey="frontStyle"
+                width={columnWidths.frontStyle || 150}
+                active={resizing?.column === 'frontStyle'}
+                onResizeStart={handleResizeStart}
+              >
+                Front Style
+              </ResizableHeaderCell>
+              <ResizableHeaderCell
+                columnKey="backStyle"
+                width={columnWidths.backStyle || 150}
+                active={resizing?.column === 'backStyle'}
+                onResizeStart={handleResizeStart}
+              >
+                Back Style
+              </ResizableHeaderCell>
+              {deck.fields.map((field) => (
+                <ResizableHeaderCell
+                  key={field.name}
+                  columnKey={fieldKey(field.name)}
+                  width={columnWidths[fieldKey(field.name)] || 150}
+                  active={resizing?.column === fieldKey(field.name)}
+                  onResizeStart={handleResizeStart}
                 >
-                  ID
-                  <div
-                    onMouseDown={(e) => handleResizeStart('id', e)}
-                    style={{
-                      position: 'absolute',
-                      right: 0,
-                      top: 0,
-                      bottom: 0,
-                      width: 5,
-                      cursor: 'col-resize',
-                      userSelect: 'none',
-                      backgroundColor: resizing?.column === 'id' ? '#228be6' : 'transparent',
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#228be6')}
-                    onMouseLeave={(e) => {
-                      if (resizing?.column !== 'id')
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                    }}
-                  />
-                </div>
-              </Table.Th>
-              <Table.Th style={{ width: columnWidths.count || 80, position: 'relative' }}>
-                <div
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-                >
-                  Count
-                  <div
-                    onMouseDown={(e) => handleResizeStart('count', e)}
-                    style={{
-                      position: 'absolute',
-                      right: 0,
-                      top: 0,
-                      bottom: 0,
-                      width: 5,
-                      cursor: 'col-resize',
-                      userSelect: 'none',
-                      backgroundColor: resizing?.column === 'count' ? '#228be6' : 'transparent',
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#228be6')}
-                    onMouseLeave={(e) => {
-                      if (resizing?.column !== 'count')
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                    }}
-                  />
-                </div>
-              </Table.Th>
-              <Table.Th style={{ width: columnWidths.frontStyle || 150, position: 'relative' }}>
-                <div
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-                >
-                  Front Style
-                  <div
-                    onMouseDown={(e) => handleResizeStart('frontStyle', e)}
-                    style={{
-                      position: 'absolute',
-                      right: 0,
-                      top: 0,
-                      bottom: 0,
-                      width: 5,
-                      cursor: 'col-resize',
-                      userSelect: 'none',
-                      backgroundColor:
-                        resizing?.column === 'frontStyle' ? '#228be6' : 'transparent',
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#228be6')}
-                    onMouseLeave={(e) => {
-                      if (resizing?.column !== 'frontStyle')
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                    }}
-                  />
-                </div>
-              </Table.Th>
-              <Table.Th style={{ width: columnWidths.backStyle || 150, position: 'relative' }}>
-                <div
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-                >
-                  Back Style
-                  <div
-                    onMouseDown={(e) => handleResizeStart('backStyle', e)}
-                    style={{
-                      position: 'absolute',
-                      right: 0,
-                      top: 0,
-                      bottom: 0,
-                      width: 5,
-                      cursor: 'col-resize',
-                      userSelect: 'none',
-                      backgroundColor: resizing?.column === 'backStyle' ? '#228be6' : 'transparent',
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#228be6')}
-                    onMouseLeave={(e) => {
-                      if (resizing?.column !== 'backStyle')
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                    }}
-                  />
-                </div>
-              </Table.Th>
-              {deck.fields.map((field) => {
-                const fieldKey = `field_${field.name}`;
-                return (
-                  <Table.Th
-                    key={field.name}
-                    style={{ width: columnWidths[fieldKey] || 150, position: 'relative' }}
-                  >
-                    <Group justify="space-between" wrap="nowrap" style={{ position: 'relative' }}>
-                      <Text size="sm" fw={500}>
-                        {field.name}
-                      </Text>
-                      <ActionIcon
-                        size="xs"
-                        color="red"
-                        variant="subtle"
-                        onClick={() => removeField(field.name)}
-                      >
-                        <IconTrash size={12} />
-                      </ActionIcon>
-                      <div
-                        onMouseDown={(e) => handleResizeStart(fieldKey, e)}
-                        style={{
-                          position: 'absolute',
-                          right: 0,
-                          top: -8,
-                          bottom: -8,
-                          width: 5,
-                          cursor: 'col-resize',
-                          userSelect: 'none',
-                          backgroundColor:
-                            resizing?.column === fieldKey ? '#228be6' : 'transparent',
-                        }}
-                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#228be6')}
-                        onMouseLeave={(e) => {
-                          if (resizing?.column !== fieldKey)
-                            e.currentTarget.style.backgroundColor = 'transparent';
-                        }}
-                      />
-                    </Group>
-                  </Table.Th>
-                );
-              })}
+                  <Group gap={4} wrap="nowrap">
+                    <Text size="sm" fw={500}>
+                      {field.name}
+                    </Text>
+                    <ActionIcon
+                      size="xs"
+                      color="red"
+                      variant="subtle"
+                      onClick={() => removeField(field.name)}
+                    >
+                      <IconTrash size={12} />
+                    </ActionIcon>
+                  </Group>
+                </ResizableHeaderCell>
+              ))}
               <Table.Th style={{ width: 50 }} />
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
+            {/* Keyed by position, not card.id: the id cell is editable, so an
+                id-based key would remount the row on every keystroke. SheetRow
+                holds no internal state, so positional keys are safe here. */}
             {deck.cards.map((card, index) => (
-              <Table.Tr key={index}>
-                <Table.Td>
-                  <TextInput
-                    value={card.id}
-                    onChange={(e) => {
-                      const newId = e.currentTarget.value;
-                      // Check for duplicate IDs
-                      const isDuplicate = deck.cards.some((c, i) => i !== index && c.id === newId);
-                      if (isDuplicate && newId !== '') {
-                        notifications.show({
-                          title: 'Error',
-                          message: 'Card ID must be unique',
-                          color: 'red',
-                        });
-                        return;
-                      }
-                      updateCardMeta(index, 'id', newId);
-                    }}
-                    variant="unstyled"
-                    size={inputSize}
-                    styles={{
-                      input: {
-                        paddingLeft: compact ? 4 : undefined,
-                        paddingRight: compact ? 4 : undefined,
-                      },
-                    }}
-                  />
-                </Table.Td>
-                <Table.Td>
-                  <NumberInput
-                    value={card.count || 1}
-                    onChange={(val) => updateCardMeta(index, 'count', Number(val))}
-                    min={1}
-                    size={inputSize}
-                    variant="unstyled"
-                    styles={{
-                      input: {
-                        paddingLeft: compact ? 4 : undefined,
-                        paddingRight: compact ? 4 : undefined,
-                      },
-                    }}
-                  />
-                </Table.Td>
-                <Table.Td>
-                  {showRawValues ? (
-                    <TextInput
-                      value={card.frontStyleId || ''}
-                      onChange={(e) => updateCardMeta(index, 'frontStyleId', e.currentTarget.value)}
-                      variant="unstyled"
-                      size={inputSize}
-                      styles={{
-                        input: {
-                          paddingLeft: compact ? 4 : undefined,
-                          paddingRight: compact ? 4 : undefined,
-                          color: !card.frontStyleId ? '#adb5bd' : undefined,
-                        },
-                      }}
-                      placeholder="default-front"
-                    />
-                  ) : (
-                    <Select
-                      data={frontStyleOptions}
-                      value={card.frontStyleId || ''}
-                      onChange={(val) => updateCardMeta(index, 'frontStyleId', val)}
-                      size={inputSize}
-                      variant="unstyled"
-                      styles={{
-                        input: {
-                          paddingLeft: compact ? 4 : undefined,
-                          paddingRight: compact ? 4 : undefined,
-                        },
-                      }}
-                    />
-                  )}
-                </Table.Td>
-                <Table.Td>
-                  {showRawValues ? (
-                    <TextInput
-                      value={card.backStyleId || ''}
-                      onChange={(e) => updateCardMeta(index, 'backStyleId', e.currentTarget.value)}
-                      variant="unstyled"
-                      size={inputSize}
-                      styles={{
-                        input: {
-                          paddingLeft: compact ? 4 : undefined,
-                          paddingRight: compact ? 4 : undefined,
-                          color: !card.backStyleId ? '#adb5bd' : undefined,
-                        },
-                      }}
-                      placeholder="default-back"
-                    />
-                  ) : (
-                    <Select
-                      data={backStyleOptions}
-                      value={card.backStyleId || ''}
-                      onChange={(val) => updateCardMeta(index, 'backStyleId', val)}
-                      size={inputSize}
-                      variant="unstyled"
-                      styles={{
-                        input: {
-                          paddingLeft: compact ? 4 : undefined,
-                          paddingRight: compact ? 4 : undefined,
-                        },
-                      }}
-                    />
-                  )}
-                </Table.Td>
-                {deck.fields.map((field) => (
-                  <Table.Td key={`${index}-${field.name}`}>
-                    {field.type === 'text' ? (
-                      <TextInput
-                        value={card.data[field.name] || ''}
-                        onChange={(e) => updateCardData(index, field.name, e.currentTarget.value)}
-                        variant="unstyled"
-                        size={inputSize}
-                        styles={{
-                          input: {
-                            paddingLeft: compact ? 4 : undefined,
-                            paddingRight: compact ? 4 : undefined,
-                          },
-                        }}
-                      />
-                    ) : (
-                      <Group wrap="nowrap" gap="xs">
-                        {card.data[field.name] && (
-                          <ImageLoader
-                            path={card.data[field.name]}
-                            style={{
-                              width: compact ? 24 : 30,
-                              height: compact ? 24 : 30,
-                              borderRadius: 4,
-                              objectFit: 'cover',
-                            }}
-                          />
-                        )}
-                        <TextInput
-                          placeholder="Image URL/Path"
-                          value={card.data[field.name] || ''}
-                          onChange={(e) => updateCardData(index, field.name, e.currentTarget.value)}
-                          variant="unstyled"
-                          size={inputSize}
-                          style={{ flex: 1 }}
-                          styles={{
-                            input: {
-                              paddingLeft: compact ? 4 : undefined,
-                              paddingRight: compact ? 4 : undefined,
-                            },
-                          }}
-                        />
-                        <ActionIcon
-                          variant="subtle"
-                          color="gray"
-                          onClick={() => handleSelectImage(index, field.name)}
-                          size={inputSize}
-                        >
-                          <IconFolder size={compact ? 12 : 14} />
-                        </ActionIcon>
-                      </Group>
-                    )}
-                  </Table.Td>
-                ))}
-                <Table.Td>
-                  <ActionIcon
-                    color="red"
-                    variant="subtle"
-                    onClick={() => removeCard(index)}
-                    size={inputSize}
-                  >
-                    <IconTrash size={compact ? 14 : 16} />
-                  </ActionIcon>
-                </Table.Td>
-              </Table.Tr>
+              <SheetRow
+                key={index}
+                card={card}
+                fields={deck.fields}
+                frontStyleOptions={frontStyleOptions}
+                backStyleOptions={backStyleOptions}
+                compact={compact}
+                showRawValues={showRawValues}
+                onChangeId={onChangeId}
+                onChangeMeta={onChangeMeta}
+                onChangeData={onChangeData}
+                onSelectImage={onSelectImage}
+                onRemove={onRemove}
+              />
             ))}
           </Table.Tbody>
         </Table>

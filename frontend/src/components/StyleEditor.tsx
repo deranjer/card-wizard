@@ -43,6 +43,10 @@ interface StyleEditorProps {
 
 const MM_TO_PX = 3.7795275591;
 
+// How many undo steps to retain. Each entry is a full deck snapshot, so an
+// unbounded stack grew memory for the whole editing session.
+const MAX_HISTORY = 100;
+
 // Undo/Redo Hook
 function useHistory<T>(initialPresent: T) {
   const [past, setPast] = useState<T[]>([]);
@@ -77,7 +81,7 @@ function useHistory<T>(initialPresent: T) {
   const set = useCallback(
     (newPresent: T) => {
       if (newPresent === present) return;
-      setPast([...past, present]);
+      setPast([...past, present].slice(-MAX_HISTORY));
       setPresent(newPresent);
       setFuture([]);
     },
