@@ -286,22 +286,16 @@ export function StyleEditor({ deck: externalDeck, setDeck: setExternalDeck }: St
     return Object.keys(styles).map((id) => ({ value: id, label: styles[id].name }));
   }, [activeTab, deck.frontStyles, deck.backStyles]);
 
-  const handleStyleChange = (newLayout: CardLayout) => {
+  const handleStyleChange = (newLayout: CardLayout, transient = false) => {
     if (!selectedStyleId) return;
-
-    if (activeTab === 'front') {
-      const newDeck = {
-        ...deck,
-        frontStyles: { ...deck.frontStyles, [selectedStyleId]: newLayout },
-      };
-      setDeck(newDeck);
-    } else {
-      const newDeck = {
-        ...deck,
-        backStyles: { ...deck.backStyles, [selectedStyleId]: newLayout },
-      };
-      setDeck(newDeck);
-    }
+    const key = activeTab === 'front' ? 'frontStyles' : 'backStyles';
+    const newDeck = {
+      ...deck,
+      [key]: { ...deck[key], [selectedStyleId]: newLayout },
+    };
+    // transient = live-apply without an undo step (colour-picker drag);
+    // a plain call on release records the single final state.
+    (transient ? setDeckSilent : setDeck)(newDeck);
   };
 
   const addElement = (type: 'text' | 'image' | 'shape', shapePreset?: string) => {
@@ -343,12 +337,15 @@ export function StyleEditor({ deck: externalDeck, setDeck: setExternalDeck }: St
     setSelectedElementId(newElement.id);
   };
 
-  const updateElement = (id: string, updates: Partial<LayoutElement>) => {
+  const updateElement = (id: string, updates: Partial<LayoutElement>, transient = false) => {
     if (!currentStyle) return;
-    handleStyleChange({
-      ...currentStyle,
-      elements: currentStyle.elements.map((el) => (el.id === id ? { ...el, ...updates } : el)),
-    });
+    handleStyleChange(
+      {
+        ...currentStyle,
+        elements: currentStyle.elements.map((el) => (el.id === id ? { ...el, ...updates } : el)),
+      },
+      transient
+    );
   };
 
   const removeElement = (id: string) => {

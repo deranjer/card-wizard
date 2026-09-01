@@ -1,4 +1,5 @@
-import { Card as CardType, Deck, CardLayout } from '../types';
+import { memo, type CSSProperties } from 'react';
+import { Card as CardType, Deck, CardLayout, LayoutElement } from '../types';
 import { ImageLoader } from './ImageLoader';
 
 interface CardRenderProps {
@@ -12,7 +13,49 @@ interface CardRenderProps {
 
 const MM_TO_PX = 3.7795275591;
 
-export function CardRender({
+function resolveLayout(deck: Deck, card: CardType, mode: 'front' | 'back'): CardLayout {
+  const styles = mode === 'front' ? deck.frontStyles : deck.backStyles;
+  let id = mode === 'front' ? card.frontStyleId : card.backStyleId;
+
+  if (!id || !styles[id]) {
+    const defaultId =
+      mode === 'front'
+        ? deck.defaultFrontStyleId || 'default-front'
+        : deck.defaultBackStyleId || 'default-back';
+    id = styles[defaultId] ? defaultId : Object.keys(styles)[0];
+  }
+  return styles[id] || { name: 'default', elements: [] };
+}
+
+function elementStyle(el: LayoutElement, scale: number): CSSProperties {
+  return {
+    position: 'absolute',
+    left: el.x * MM_TO_PX * scale,
+    top: el.y * MM_TO_PX * scale,
+    width: el.width * MM_TO_PX * scale,
+    height: el.height * MM_TO_PX * scale,
+    fontSize: (el.fontSize || 12) * scale,
+    color: el.color || '#000000',
+    fontFamily: el.fontFamily || 'Arial, sans-serif',
+    fontWeight: el.fontWeight || 'normal',
+    fontStyle: el.fontStyle || 'normal',
+    textDecoration: el.textDecoration || 'none',
+    display: 'flex',
+    alignItems:
+      el.verticalAlign === 'top'
+        ? 'flex-start'
+        : el.verticalAlign === 'bottom'
+          ? 'flex-end'
+          : 'center',
+    justifyContent:
+      el.textAlign === 'left' ? 'flex-start' : el.textAlign === 'right' ? 'flex-end' : 'center',
+    textAlign: el.textAlign || 'center',
+    whiteSpace: 'pre-wrap',
+    overflow: 'hidden',
+  };
+}
+
+function CardRenderImpl({
   card,
   deck,
   mode,
@@ -20,28 +63,7 @@ export function CardRender({
   border = true,
   className,
 }: CardRenderProps) {
-  const styles = mode === 'front' ? deck.frontStyles : deck.backStyles;
-  // Determine effective style ID
-  let effectiveStyleId = mode === 'front' ? card.frontStyleId : card.backStyleId;
-
-  // Fallback to default if ID is missing
-  if (!effectiveStyleId || !styles[effectiveStyleId]) {
-    const defaultId =
-      mode === 'front'
-        ? deck.defaultFrontStyleId || 'default-front'
-        : deck.defaultBackStyleId || 'default-back';
-    if (styles[defaultId]) {
-      effectiveStyleId = defaultId;
-    } else {
-      // Fallback to first available style
-      const allIds = Object.keys(styles);
-      if (allIds.length > 0) {
-        effectiveStyleId = allIds[0];
-      }
-    }
-  }
-
-  const layout: CardLayout = styles[effectiveStyleId] || { name: 'default', elements: [] };
+  const layout = resolveLayout(deck, card, mode);
 
   return (
     <div
@@ -56,56 +78,17 @@ export function CardRender({
       }}
     >
       {layout.elements.map((el) => (
-        <div
-          key={el.id}
-          style={{
-            position: 'absolute',
-            left: el.x * MM_TO_PX * scale,
-            top: el.y * MM_TO_PX * scale,
-            width: el.width * MM_TO_PX * scale,
-            height: el.height * MM_TO_PX * scale,
-            fontSize: (el.fontSize || 12) * scale,
-            color: el.color || '#000000',
-            fontFamily: el.fontFamily || 'Arial, sans-serif',
-            fontWeight: el.fontWeight || 'normal',
-            fontStyle: el.fontStyle || 'normal',
-            textDecoration: el.textDecoration || 'none',
-            display: 'flex',
-            alignItems:
-              el.verticalAlign === 'top'
-                ? 'flex-start'
-                : el.verticalAlign === 'bottom'
-                  ? 'flex-end'
-                  : 'center',
-            justifyContent:
-              el.textAlign === 'left'
-                ? 'flex-start'
-                : el.textAlign === 'right'
-                  ? 'flex-end'
-                  : 'center',
-            textAlign: el.textAlign || 'center',
-            whiteSpace: 'pre-wrap',
-            overflow: 'hidden',
-          }}
-        >
+        <div key={el.id} style={elementStyle(el, scale)}>
           {el.type === 'image' ? (
             el.field && card.data[el.field] ? (
               <ImageLoader
                 path={card.data[el.field]}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: (el.objectFit as any) || 'contain',
-                }}
+                style={{ width: '100%', height: '100%', objectFit: el.objectFit || 'contain' }}
               />
             ) : el.staticText ? (
               <ImageLoader
                 path={el.staticText}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: (el.objectFit as any) || 'contain',
-                }}
+                style={{ width: '100%', height: '100%', objectFit: el.objectFit || 'contain' }}
               />
             ) : null
           ) : el.type === 'shape' && el.points ? (
@@ -134,3 +117,11 @@ export function CardRender({
     </div>
   );
 }
+
+/**
+ * Renders a card face as positioned DOM. Memoised: in the preview grid (and the
+ * style-editor overlay) the parent re-renders for reasons unrelated to a given
+ * card — a modal opening, a zoom slider — and a plain function component would
+ * re-reconcile every element of every card each time.
+ */
+export const CardRender = memo(CardRenderImpl);
