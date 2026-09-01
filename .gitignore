@@ -2,3 +2,27 @@ build/bin
 node_modules
 frontend/dist
 card_wizard.exe
+
+# Compiled binaries / Go test binaries
+*.exe
+*.test
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+
+# Local env
+.env
+.env.*
+!.env.example
+
+# Vite transient config-load files
+frontend/*.timestamp-*.mjs

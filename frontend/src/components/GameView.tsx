@@ -514,7 +514,6 @@ export function GameView() {
                 padding="md"
             >
                 <Help section={helpSection} />
-                <Help section={helpSection} />
             </Drawer>
 
             <KeyStatsModal

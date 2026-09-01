@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
-import { SimpleGrid, Card, Image, Text, Group, Button, Stack, ActionIcon, FileButton, Modal, LoadingOverlay } from '@mantine/core';
+import { useState, useEffect } from 'react';
+import { SimpleGrid, Card, Image, Text, Group, Button, Stack, ActionIcon, LoadingOverlay } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconUpload, IconTrash, IconReplace, IconRefresh } from '@tabler/icons-react';
-import { ListProjectImages, AddProjectImage, DeleteProjectImage, ReplaceProjectImage, SelectImageFile, LoadImageAsDataURL, SelectImageFiles, AddProjectImages } from '../../wailsjs/go/main/App';
+import { IconUpload, IconTrash, IconReplace, IconRefresh, IconFolderOpen } from '@tabler/icons-react';
+import { ListProjectImages, AddProjectImage, DeleteProjectImage, ReplaceProjectImage, SelectImageFile, LoadImageAsDataURL, SelectImageFiles, AddProjectImages, OpenAssetFolder } from '../../wailsjs/go/main/App';
 
 interface AssetGalleryProps {
     onNavigateToHelp?: (section: string) => void;
@@ -52,10 +52,6 @@ export function AssetGallery({ onNavigateToHelp, onSelect }: AssetGalleryProps) 
         // For now, let's catch the error silently if it's "no game loaded" which naturally happens on startup before LoadGame.
         loadImages();
     }, []);
-
-    const handleUpload = async (file: File | null) => {
-        // ... (Not used directly, but kept if we switch to Dropzone later)
-    };
 
     const handleAddImage = async () => {
         try {
@@ -114,11 +110,21 @@ export function AssetGallery({ onNavigateToHelp, onSelect }: AssetGalleryProps) 
         }
     };
 
+    const handleOpenAssetFolder = async () => {
+        try {
+            await OpenAssetFolder();
+        } catch (error) {
+            console.error(error);
+            notifications.show({ title: 'Error', message: 'Failed to open folder', color: 'red' });
+        }
+    };
+
     return (
         <Stack h="100%" p="md">
             <Group justify="space-between">
                 <Text size="xl" fw={700}>{onSelect ? 'Select Image' : 'Asset Gallery'}</Text>
                 <Group>
+                    <Button leftSection={<IconFolderOpen size={16} />} variant="light" color="indigo" onClick={handleOpenAssetFolder}>Open Asset Folder</Button>
                     <Button leftSection={<IconRefresh size={16} />} variant="light" onClick={loadImages} loading={loading}>Refresh</Button>
                     <Button leftSection={<IconUpload size={16} />} onClick={handleAddImage} loading={loading}>Add Image</Button>
                 </Group>
