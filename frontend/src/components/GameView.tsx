@@ -62,7 +62,7 @@ export function GameView() {
 
       const images: Record<string, string> = {};
       const { createRoot } = await import('react-dom/client');
-      const html2canvas = (await import('html2canvas')).default;
+      const html2canvas = (await import('html2canvas-pro')).default;
 
       // Loop through all decks
       for (const deck of game.decks) {

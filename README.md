@@ -53,13 +53,13 @@ Card Wizard is built using a modern hybrid stack, combining the performance of G
 
 - **Backend**: [Go](https://go.dev/) (Golang)
   - Framework: [Wails v2](https://wails.io/)
-  - PDF Generation: `gofpdf`
+  - PDF Generation: [`go-pdf/fpdf`](https://github.com/go-pdf/fpdf)
   - Excel Processing: `excelize`
 - **Frontend**:
   - [React 18](https://react.dev/)
   - [TypeScript](https://www.typescriptlang.org/)
-  - [Vite](https://vitejs.dev/)
-  - [Mantine UI v7](https://mantine.dev/)
+  - [Vite 7](https://vitejs.dev/)
+  - [Mantine UI v8](https://mantine.dev/)
   - [React-Rnd](https://github.com/bokuweb/react-rnd) for canvas interactions
 
 ## 👨‍💻 Developer Guide

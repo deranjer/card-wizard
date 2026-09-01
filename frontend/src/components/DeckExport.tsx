@@ -38,7 +38,7 @@ export function DeckExport({ deck }: DeckExportProps) {
 
       const images: Record<string, string> = {};
       const { createRoot } = await import('react-dom/client');
-      const html2canvas = (await import('html2canvas')).default;
+      const html2canvas = (await import('html2canvas-pro')).default;
 
       for (const card of deck.cards) {
         // Render Front
