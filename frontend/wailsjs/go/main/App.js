@@ -34,10 +34,6 @@ export function GetPDFLayout(arg1) {
   return window['go']['main']['App']['GetPDFLayout'](arg1);
 }
 
-export function Greet(arg1) {
-  return window['go']['main']['App']['Greet'](arg1);
-}
-
 export function ImportCardsWithMapping(arg1, arg2, arg3) {
   return window['go']['main']['App']['ImportCardsWithMapping'](arg1, arg2, arg3);
 }
@@ -58,16 +54,16 @@ export function NewGame() {
   return window['go']['main']['App']['NewGame']();
 }
 
+export function OpenAssetFolder() {
+  return window['go']['main']['App']['OpenAssetFolder']();
+}
+
 export function ReplaceProjectImage(arg1, arg2) {
   return window['go']['main']['App']['ReplaceProjectImage'](arg1, arg2);
 }
 
 export function ResolveImagePath(arg1) {
   return window['go']['main']['App']['ResolveImagePath'](arg1);
-}
-
-export function SampleDeck() {
-  return window['go']['main']['App']['SampleDeck']();
 }
 
 export function SaveGame(arg1) {

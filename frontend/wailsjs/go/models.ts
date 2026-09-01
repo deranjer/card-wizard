@@ -1,26 +1,3 @@
-export namespace cards {
-
-	export class Card {
-	    id: string;
-	    name: string;
-	    description: string;
-	    copies: number;
-
-	    static createFrom(source: any = {}) {
-	        return new Card(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.name = source["name"];
-	        this.description = source["description"];
-	        this.copies = source["copies"];
-	    }
-	}
-
-}
-
 export namespace deck {
 
 	export class Card {
@@ -43,6 +20,20 @@ export namespace deck {
 	        this.backStyleId = source["backStyleId"];
 	    }
 	}
+	export class Point {
+	    x: number;
+	    y: number;
+
+	    static createFrom(source: any = {}) {
+	        return new Point(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.x = source["x"];
+	        this.y = source["y"];
+	    }
+	}
 	export class LayoutElement {
 	    id: string;
 	    name?: string;
@@ -62,6 +53,10 @@ export namespace deck {
 	    fontWeight?: string;
 	    fontStyle?: string;
 	    textDecoration?: string;
+	    points?: Point[];
+	    fillColor?: string;
+	    strokeColor?: string;
+	    strokeWidth?: number;
 
 	    static createFrom(source: any = {}) {
 	        return new LayoutElement(source);
@@ -87,7 +82,29 @@ export namespace deck {
 	        this.fontWeight = source["fontWeight"];
 	        this.fontStyle = source["fontStyle"];
 	        this.textDecoration = source["textDecoration"];
+	        this.points = this.convertValues(source["points"], Point);
+	        this.fillColor = source["fillColor"];
+	        this.strokeColor = source["strokeColor"];
+	        this.strokeWidth = source["strokeWidth"];
 	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class CardLayout {
 	    name: string;
@@ -120,6 +137,22 @@ export namespace deck {
 		    }
 		    return a;
 		}
+	}
+	export class CustomFont {
+	    name: string;
+	    path: string;
+	    family: string;
+
+	    static createFrom(source: any = {}) {
+	        return new CustomFont(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.family = source["family"];
+	    }
 	}
 	export class RenderedCard {
 	    styleId: string;
@@ -162,6 +195,7 @@ export namespace deck {
 	    backStyles: Record<string, CardLayout>;
 	    defaultFrontStyleId: string;
 	    defaultBackStyleId: string;
+	    customFonts?: CustomFont[];
 	    paperSize: string;
 	    drawCutGuides: boolean;
 	    renderedCards: RenderedCard[];
@@ -182,6 +216,7 @@ export namespace deck {
 	        this.backStyles = this.convertValues(source["backStyles"], CardLayout, true);
 	        this.defaultFrontStyleId = source["defaultFrontStyleId"];
 	        this.defaultBackStyleId = source["defaultBackStyleId"];
+	        this.customFonts = this.convertValues(source["customFonts"], CustomFont);
 	        this.paperSize = source["paperSize"];
 	        this.drawCutGuides = source["drawCutGuides"];
 	        this.renderedCards = this.convertValues(source["renderedCards"], RenderedCard);
@@ -235,6 +270,7 @@ export namespace deck {
 	        this.marginTop = source["marginTop"];
 	    }
 	}
+
 
 }
 

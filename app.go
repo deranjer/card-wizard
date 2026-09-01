@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -13,7 +14,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"github.com/xuri/excelize/v2"
 
-	"card_wizard/internal/cards"
+	"card_wizard/internal/archive"
 	"card_wizard/internal/deck"
 	"card_wizard/internal/game"
 	"card_wizard/internal/pdf"
@@ -27,37 +28,20 @@ type ExcelSelection struct {
 
 // App struct
 type App struct {
-	ctx             context.Context
-	cardsSvc        *cards.Service
-	currentGamePath string // Path to the currently loaded/saved game file
+	ctx        context.Context
+	workingDir string // Path to the temporary working directory where the game is being edited
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
-	return &App{
-		cardsSvc: cards.NewService(),
-	}
+	return &App{}
 }
 
 // startup is called when the app starts. The context is saved
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-}
-
-// Greet returns a greeting for the given name
-func (a *App) Greet(name string) string {
-	return fmt.Sprintf("Hello %s, It's show time!", name)
-}
-
-// SampleDeck returns sample card data sourced from the card service.
-func (a *App) SampleDeck() []cards.Card {
-	ctx := a.ctx
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	return a.cardsSvc.SampleDeck(ctx)
+	a.NewGame() // Initialize a working directory on startup
 }
 
 // SelectExcelFile opens a file dialog and returns the path and list of sheets
@@ -359,14 +343,14 @@ func (a *App) ExportGameXLSX(g game.Game) error {
 	return nil
 }
 
-// SaveGame saves the current game to a JSON file
 func (a *App) SaveGame(g game.Game) error {
 	selection, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
 		Title: "Save Game",
 		Filters: []runtime.FileFilter{
+			{DisplayName: "Card Wizard Game", Pattern: "*.cwiz"},
 			{DisplayName: "JSON Files", Pattern: "*.json"},
 		},
-		DefaultFilename: "game.json",
+		DefaultFilename: g.Name,
 	})
 	if err != nil {
 		return err
@@ -375,29 +359,43 @@ func (a *App) SaveGame(g game.Game) error {
 		return nil // User cancelled
 	}
 
-	// Store the game path for relative path resolution
-	a.currentGamePath = selection
-
-	// Convert absolute image paths to relative paths before saving
-	gameDir := filepath.Dir(selection)
-	for i := range g.Decks {
-		g.Decks[i] = a.convertPathsToRelative(g.Decks[i], gameDir)
+	// Ensure extension
+	ext := strings.ToLower(filepath.Ext(selection))
+	if ext == "" {
+		selection += ".cwiz"
+		ext = ".cwiz"
 	}
 
+	// Convert paths to relative based on working dir
+	for i := range g.Decks {
+		g.Decks[i] = a.convertPathsToRelative(g.Decks[i], a.workingDir)
+	}
+
+	// Always save game.json to working directory first
 	data, err := json.MarshalIndent(g, "", "  ")
 	if err != nil {
 		return err
 	}
+	gameJsonPath := filepath.Join(a.workingDir, "game.json")
+	if err := os.WriteFile(gameJsonPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write game.json to working dir: %w", err)
+	}
 
+	// If saving as cwiz, zip the working directory
+	if ext == ".cwiz" {
+		return archive.ZipDir(a.workingDir, selection)
+	}
+
+	// Legacy JSON saving logic
 	return os.WriteFile(selection, data, 0644)
 }
 
-// LoadGame loads a game from a JSON file
+// LoadGame loads a game from a file
 func (a *App) LoadGame() (*game.Game, error) {
 	selection, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
 		Title: "Load Game",
 		Filters: []runtime.FileFilter{
-			{DisplayName: "JSON Files", Pattern: "*.json"},
+			{DisplayName: "Supported Files", Pattern: "*.cwiz;*.json"},
 		},
 	})
 	if err != nil {
@@ -407,9 +405,32 @@ func (a *App) LoadGame() (*game.Game, error) {
 		return nil, nil // User cancelled
 	}
 
-	// Store the game path for relative path resolution
-	a.currentGamePath = selection
+	ext := strings.ToLower(filepath.Ext(selection))
+	if ext == ".cwiz" {
+		// Create a new fresh working directory
+		a.NewGame() // Sets up a new a.workingDir
 
+		// Unzip the file
+		if err := archive.Unzip(selection, a.workingDir); err != nil {
+			return nil, fmt.Errorf("failed to extract .cwiz file: %w", err)
+		}
+
+		// Read the extracted game.json
+		data, err := os.ReadFile(filepath.Join(a.workingDir, "game.json"))
+		if err != nil {
+			return nil, fmt.Errorf("failed to read game.json from archive: %w", err)
+		}
+
+		var g game.Game
+		if err := json.Unmarshal(data, &g); err != nil {
+			return nil, fmt.Errorf("failed to parse game.json: %w", err)
+		}
+
+		return &g, nil
+	}
+
+	// Legacy JSON loading: just read it, and set working directory to its folder
+	a.workingDir = filepath.Dir(selection)
 	data, err := os.ReadFile(selection)
 	if err != nil {
 		return nil, err
@@ -436,9 +457,19 @@ func (a *App) LoadGame() (*game.Game, error) {
 	return &g, nil
 }
 
-// NewGame resets the current game path, effectively starting a new project
+// NewGame resets the current game path and creates a new temporary working directory
 func (a *App) NewGame() {
-	a.currentGamePath = ""
+	// Create a new temp directory
+	tempDir, err := os.MkdirTemp("", "cardwizard_*")
+	if err != nil {
+		fmt.Printf("Failed to create temp directory: %v\n", err)
+		return
+	}
+
+	a.workingDir = tempDir
+
+	// Pre-create images directory
+	os.MkdirAll(filepath.Join(a.workingDir, "images"), 0755)
 }
 
 // GeneratePDF generates a PDF for the deck
@@ -472,14 +503,14 @@ func (a *App) SelectImageFile() (string, error) {
 	return selection, err
 }
 
-// AddProjectImage copies an image to the project's "images" directory
+// AddProjectImage copies an image to the project's "images" working directory
 func (a *App) AddProjectImage(srcPath string) (string, error) {
-	if a.currentGamePath == "" {
-		return "", fmt.Errorf("no game loaded")
+	if a.workingDir == "" {
+		// Fallback if not initialized
+		a.NewGame()
 	}
 
-	gameDir := filepath.Dir(a.currentGamePath)
-	imagesDir := filepath.Join(gameDir, "images")
+	imagesDir := filepath.Join(a.workingDir, "images")
 
 	// Create images directory if it doesn't exist
 	if err := os.MkdirAll(imagesDir, 0755); err != nil {
@@ -553,12 +584,11 @@ func (a *App) AddProjectImages(srcPaths []string) ([]string, error) {
 
 // ListProjectImages returns a list of filenames in the project's "images" directory
 func (a *App) ListProjectImages() ([]string, error) {
-	if a.currentGamePath == "" {
-		return nil, fmt.Errorf("no game loaded")
+	if a.workingDir == "" {
+		return nil, nil
 	}
 
-	gameDir := filepath.Dir(a.currentGamePath)
-	imagesDir := filepath.Join(gameDir, "images")
+	imagesDir := filepath.Join(a.workingDir, "images")
 
 	// Create images directory if it doesn't exist (just in case)
 	if err := os.MkdirAll(imagesDir, 0755); err != nil {
@@ -586,24 +616,22 @@ func (a *App) ListProjectImages() ([]string, error) {
 
 // DeleteProjectImage deletes an image from the project's "images" directory
 func (a *App) DeleteProjectImage(filename string) error {
-	if a.currentGamePath == "" {
-		return fmt.Errorf("no game loaded")
+	if a.workingDir == "" {
+		return fmt.Errorf("no working directory")
 	}
 
-	gameDir := filepath.Dir(a.currentGamePath)
-	imagePath := filepath.Join(gameDir, "images", filename)
+	imagePath := filepath.Join(a.workingDir, "images", filename)
 
 	return os.Remove(imagePath)
 }
 
 // ReplaceProjectImage overwrites a project image with a new file
 func (a *App) ReplaceProjectImage(targetFilename string, srcPath string) error {
-	if a.currentGamePath == "" {
-		return fmt.Errorf("no game loaded")
+	if a.workingDir == "" {
+		return fmt.Errorf("no working directory")
 	}
 
-	gameDir := filepath.Dir(a.currentGamePath)
-	destPath := filepath.Join(gameDir, "images", targetFilename)
+	destPath := filepath.Join(a.workingDir, "images", targetFilename)
 
 	input, err := os.ReadFile(srcPath)
 	if err != nil {
@@ -611,6 +639,50 @@ func (a *App) ReplaceProjectImage(targetFilename string, srcPath string) error {
 	}
 
 	return os.WriteFile(destPath, input, 0644)
+}
+
+// OpenAssetFolder opens the temporary working directory's "images" folder in the OS file explorer
+func (a *App) OpenAssetFolder() error {
+	if a.workingDir == "" {
+		a.NewGame() // fallback
+	}
+
+	imagesDir := filepath.Join(a.workingDir, "images")
+
+	// Create it if it doesn't exist
+	if err := os.MkdirAll(imagesDir, 0755); err != nil {
+		return fmt.Errorf("failed to create images directory: %w", err)
+	}
+
+	// Open the folder
+	// We use standard runtime environment to open folder natively
+	// (Wails has runtime.Environment() but it's easier to just use exec for OS specific)
+	// For windows: `explorer`
+	// For macOS: `open`
+	// For linux: `xdg-open`
+
+	// We can cheat by using wails BrowserOpenURL but on a file:// scheme,
+	// or standard library exec. We'll use exec to be safe since it's desktop.
+
+	var cmd string
+	var args []string
+
+	switch runtime.Environment(a.ctx).Platform {
+	case "windows":
+		cmd = "explorer"
+		args = []string{imagesDir}
+	case "darwin":
+		cmd = "open"
+		args = []string{imagesDir}
+	case "linux":
+		cmd = "xdg-open"
+		args = []string{imagesDir}
+	default:
+		return fmt.Errorf("unsupported platform")
+	}
+
+	c := exec.Command(cmd, args...)
+	return c.Start()
 }
 
 // SelectFontFile opens a file dialog to select a font
@@ -683,14 +755,13 @@ func (a *App) ResolveImagePath(path string) string {
 		return path
 	}
 
-	// If no game is loaded, return path as-is (will likely fail, but that's expected)
-	if a.currentGamePath == "" {
+	// If no working dir, return path as-is
+	if a.workingDir == "" {
 		return path
 	}
 
-	// Resolve relative to game directory
-	gameDir := filepath.Dir(a.currentGamePath)
-	return filepath.Join(gameDir, path)
+	// Resolve relative to working directory
+	return filepath.Join(a.workingDir, path)
 }
 
 // convertPathsToRelative converts all absolute image paths in a deck to relative paths
