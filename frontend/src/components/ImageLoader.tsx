@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { LoadImageAsDataURL } from '../../wailsjs/go/main/App';
+import { useEffect, useState } from 'react';
+import { assetUrl } from '../hooks/useAssetUrl';
 
 interface ImageLoaderProps {
   path: string;
@@ -7,68 +7,21 @@ interface ImageLoaderProps {
   alt?: string;
 }
 
-// Cache for loaded images
-const imageCache = new Map<string, string>();
-
+/**
+ * Renders a project image by path. Shows a neutral placeholder while the
+ * browser fetches it and an error box if it fails to load. The image is
+ * served straight from disk via `/local-image` (see {@link assetUrl}), so
+ * there is no IPC round-trip and no in-memory base64 cache.
+ */
 export function ImageLoader({ path, style, alt }: ImageLoaderProps) {
-  const [src, setSrc] = useState<string>('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const src = assetUrl(path);
+  const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>(src ? 'loading' : 'error');
 
   useEffect(() => {
-    if (!path) {
-      setSrc('');
-      setLoading(false);
-      return;
-    }
-
-    // Check if it's already a data URL or HTTP URL
-    if (path.startsWith('data:') || path.startsWith('http')) {
-      setSrc(path);
-      setLoading(false);
-      return;
-    }
-
-    // Check cache
-    if (imageCache.has(path)) {
-      setSrc(imageCache.get(path)!);
-      setLoading(false);
-      return;
-    }
-
-    // Load from file system
-    setLoading(true);
-    setError(false);
-    LoadImageAsDataURL(path)
-      .then((url) => {
-        imageCache.set(path, url);
-        setSrc(url);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error('Failed to load image:', path, err);
-        setError(true);
-        setLoading(false);
-      });
+    setStatus(assetUrl(path) ? 'loading' : 'error');
   }, [path]);
 
-  if (loading) {
-    return (
-      <div
-        style={{
-          ...style,
-          backgroundColor: '#f0f0f0',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        Loading...
-      </div>
-    );
-  }
-
-  if (error || !src) {
+  if (status === 'error') {
     return (
       <div
         style={{
@@ -80,10 +33,22 @@ export function ImageLoader({ path, style, alt }: ImageLoaderProps) {
           fontSize: '10px',
         }}
       >
-        Error
+        {src ? 'Error' : 'No image'}
       </div>
     );
   }
 
-  return <img src={src} style={style} alt={alt || ''} />;
+  return (
+    <img
+      src={src}
+      style={{
+        ...style,
+        ...(status === 'loading' ? { backgroundColor: '#f0f0f0' } : null),
+      }}
+      alt={alt || ''}
+      loading="lazy"
+      onLoad={() => setStatus('loaded')}
+      onError={() => setStatus('error')}
+    />
+  );
 }
