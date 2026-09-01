@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Paper,
   Title,
@@ -15,8 +15,6 @@ import {
 import { Deck, PDFLayout } from '../types';
 import { GetPDFLayout, GeneratePDF } from '../../wailsjs/go/main/App';
 import { notifications } from '@mantine/notifications';
-import { CardRender } from './CardRender';
-import { renderCardToImage } from '../utils/cardRenderer';
 import { IconHelp } from '@tabler/icons-react';
 
 interface PrintPreviewProps {
@@ -25,10 +23,12 @@ interface PrintPreviewProps {
 }
 
 interface RenderedCardImage {
-  styleId: string;
+  cardId: string;
   side: 'front' | 'back';
   image: string;
 }
+
+const MM_TO_PX = 3.7795275591;
 
 export function PrintPreview({ deck, onNavigateToHelp }: PrintPreviewProps) {
   const [layout, setLayout] = useState<PDFLayout | null>(null);
@@ -38,26 +38,27 @@ export function PrintPreview({ deck, onNavigateToHelp }: PrintPreviewProps) {
   const [showCutGuides, setShowCutGuides] = useState(false);
   const [previewMode, setPreviewMode] = useState<'front' | 'back'>('front');
   const [renderedImages, setRenderedImages] = useState<RenderedCardImage[]>([]);
-  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
-  // Fetch layout on mount
+  // The Go layout calc only reads size + paper, so don't re-fetch on unrelated
+  // deck edits (it used to fire on every keystroke while this tab was open).
   useEffect(() => {
-    const fetchLayout = async () => {
-      setLoading(true);
-      try {
-        const result = await GetPDFLayout(deck as any);
-        setLayout(result);
-      } catch (error) {
-        console.error('Failed to get PDF layout:', error);
-      } finally {
-        setLoading(false);
-      }
+    let cancelled = false;
+    setLoading(true);
+    GetPDFLayout(deck as any)
+      .then((result) => {
+        if (!cancelled) setLayout(result);
+      })
+      .catch((error) => console.error('Failed to get PDF layout:', error))
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deck.width, deck.height, deck.paperSize]);
 
-    fetchLayout();
-  }, [deck]);
-
-  // Reset preview when deck changes
+  // Invalidate a stale preview when the cards or styles change.
   useEffect(() => {
     setPreviewGenerated(false);
     setRenderedImages([]);
@@ -65,51 +66,45 @@ export function PrintPreview({ deck, onNavigateToHelp }: PrintPreviewProps) {
 
   const handleGeneratePreview = async () => {
     setGenerating(true);
+    notifications.show({
+      id: 'print-preview',
+      title: 'Rendering',
+      message: 'Rendering cards…',
+      loading: true,
+      autoClose: false,
+    });
     try {
-      const images: RenderedCardImage[] = [];
-
-      // Collect unique styles
-      const frontStyles = new Set(deck.cards.map((c) => c.frontStyleId || 'default-front'));
-      const backStyles = new Set(deck.cards.map((c) => c.backStyleId || 'default-back'));
-
-      // Render front cards
-      for (const styleId of frontStyles) {
-        const refKey = `front-${styleId}`;
-        const element = cardRefs.current.get(refKey);
-
-        if (element) {
-          const MM_TO_PX = 3.7795275591;
-          const image = await renderCardToImage(
-            element,
-            deck.width * MM_TO_PX,
-            deck.height * MM_TO_PX
-          );
-          images.push({ styleId, side: 'front', image });
-        }
-      }
-
-      // Render back cards
-      for (const styleId of backStyles) {
-        const refKey = `back-${styleId}`;
-        const element = cardRefs.current.get(refKey);
-
-        if (element) {
-          const MM_TO_PX = 3.7795275591;
-          const image = await renderCardToImage(
-            element,
-            deck.width * MM_TO_PX,
-            deck.height * MM_TO_PX
-          );
-          images.push({ styleId, side: 'back', image });
-        }
-      }
-
-      setRenderedImages(images);
+      const { renderDeckFaces } = await import('../utils/exportImages');
+      const faces = await renderDeckFaces([deck], {
+        onProgress: (done, total) =>
+          notifications.update({
+            id: 'print-preview',
+            title: 'Rendering',
+            message: `Rendering cards… ${done}/${total}`,
+            loading: true,
+            autoClose: false,
+          }),
+      });
+      setRenderedImages(faces.map((f) => ({ cardId: f.cardId, side: f.side, image: f.dataUrl })));
       setPreviewGenerated(true);
-      notifications.show({ title: 'Success', message: 'Preview generated successfully' });
+      notifications.update({
+        id: 'print-preview',
+        title: 'Success',
+        message: 'Preview generated',
+        color: 'green',
+        loading: false,
+        autoClose: 2500,
+      });
     } catch (err) {
       console.error('Preview generation error:', err);
-      notifications.show({ title: 'Error', message: 'Failed to generate preview', color: 'red' });
+      notifications.update({
+        id: 'print-preview',
+        title: 'Error',
+        message: 'Failed to generate preview',
+        color: 'red',
+        loading: false,
+        autoClose: 3000,
+      });
     } finally {
       setGenerating(false);
     }
@@ -124,15 +119,12 @@ export function PrintPreview({ deck, onNavigateToHelp }: PrintPreviewProps) {
       });
       return;
     }
-
     try {
-      const deckWithImages = {
+      await GeneratePDF({
         ...deck,
         renderedCards: renderedImages,
         drawCutGuides: showCutGuides,
-      };
-
-      await GeneratePDF(deckWithImages as any);
+      } as any);
       notifications.show({ title: 'Success', message: 'PDF generated successfully' });
     } catch (err) {
       console.error('PDF generation error:', err);
@@ -144,26 +136,18 @@ export function PrintPreview({ deck, onNavigateToHelp }: PrintPreviewProps) {
     return <LoadingOverlay visible={true} />;
   }
 
-  const MM_TO_PX = 3.7795275591;
   const previewScale = 0.8;
   const totalCards = deck.cards.reduce((sum, card) => sum + (card.count || 1), 0);
   const cardsPerPage = layout.cardsPerRow * layout.cardsPerCol;
   const totalPages = Math.ceil(totalCards / cardsPerPage) * 2;
 
-  // Generate cards for the first page
-  const pageCards: any[] = [];
-  let currentCount = 0;
+  // Expand by count, then take the first page's worth.
+  const pageCards: Deck['cards'] = [];
   for (const card of deck.cards) {
-    const count = card.count || 1;
-    for (let i = 0; i < count; i++) {
-      if (currentCount < cardsPerPage) {
-        pageCards.push(card);
-        currentCount++;
-      } else {
-        break;
-      }
+    for (let i = 0; i < (card.count || 1) && pageCards.length < cardsPerPage; i++) {
+      pageCards.push(card);
     }
-    if (currentCount >= cardsPerPage) break;
+    if (pageCards.length >= cardsPerPage) break;
   }
 
   return (
@@ -258,7 +242,6 @@ export function PrintPreview({ deck, onNavigateToHelp }: PrintPreviewProps) {
                 position: 'relative',
               }}
             >
-              {/* Draw Margins Guide */}
               <div
                 style={{
                   position: 'absolute',
@@ -274,8 +257,6 @@ export function PrintPreview({ deck, onNavigateToHelp }: PrintPreviewProps) {
               {pageCards.map((card, index) => {
                 const row = Math.floor(index / layout.cardsPerRow);
                 const col = index % layout.cardsPerRow;
-
-                // Mirror columns for back page (Standard Duplex)
                 const displayCol = previewMode === 'back' ? layout.cardsPerRow - 1 - col : col;
 
                 const x =
@@ -287,13 +268,8 @@ export function PrintPreview({ deck, onNavigateToHelp }: PrintPreviewProps) {
                   MM_TO_PX *
                   previewScale;
 
-                // Find rendered image
-                const styleId =
-                  previewMode === 'front'
-                    ? card.frontStyleId || 'default-front'
-                    : card.backStyleId || 'default-back';
-                const renderedImage = renderedImages.find(
-                  (img) => img.styleId === styleId && img.side === previewMode
+                const rendered = renderedImages.find(
+                  (img) => img.cardId === card.id && img.side === previewMode
                 );
 
                 return (
@@ -313,15 +289,15 @@ export function PrintPreview({ deck, onNavigateToHelp }: PrintPreviewProps) {
                       overflow: 'hidden',
                     }}
                   >
-                    {renderedImage ? (
+                    {rendered ? (
                       <img
-                        src={renderedImage.image}
+                        src={rendered.image}
                         style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                        alt="card"
+                        alt={card.id}
                       />
                     ) : (
                       <Text size="xs" c="dimmed">
-                        Loading...
+                        —
                       </Text>
                     )}
                   </div>
@@ -331,44 +307,6 @@ export function PrintPreview({ deck, onNavigateToHelp }: PrintPreviewProps) {
           </Box>
         </Paper>
       )}
-
-      {/* Hidden card renderers for PDF generation */}
-      <div style={{ position: 'absolute', left: '-99999px', top: '-99999px' }}>
-        {Array.from(new Set(deck.cards.map((c) => c.frontStyleId || 'default-front'))).map(
-          (styleId) => {
-            const sampleCard =
-              deck.cards.find((c) => (c.frontStyleId || 'default-front') === styleId) ||
-              deck.cards[0];
-            return (
-              <div
-                key={`front-${styleId}`}
-                ref={(el) => {
-                  if (el) cardRefs.current.set(`front-${styleId}`, el);
-                }}
-              >
-                <CardRender card={sampleCard} deck={deck} mode="front" scale={1} border={false} />
-              </div>
-            );
-          }
-        )}
-        {Array.from(new Set(deck.cards.map((c) => c.backStyleId || 'default-back'))).map(
-          (styleId) => {
-            const sampleCard =
-              deck.cards.find((c) => (c.backStyleId || 'default-back') === styleId) ||
-              deck.cards[0];
-            return (
-              <div
-                key={`back-${styleId}`}
-                ref={(el) => {
-                  if (el) cardRefs.current.set(`back-${styleId}`, el);
-                }}
-              >
-                <CardRender card={sampleCard} deck={deck} mode="back" scale={1} border={false} />
-              </div>
-            );
-          }
-        )}
-      </div>
     </Stack>
   );
 }

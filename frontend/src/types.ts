@@ -91,6 +91,8 @@ export interface PDFLayout {
 }
 
 export interface Game {
+  /** Save-format version; stamped by the Go layer on save. */
+  schemaVersion?: number;
   name: string;
   decks: Deck[];
 }

@@ -82,10 +82,13 @@ type Deck struct {
 	RenderedCards       []RenderedCard        `json:"renderedCards"`         // Pre-rendered card images for PDF
 }
 
+// RenderedCard is one pre-rasterised card face supplied by the frontend for
+// PDF generation. Keyed per card (not per style) so that two cards sharing a
+// style but carrying different field data print differently.
 type RenderedCard struct {
-	StyleID string `json:"styleId"`
-	Side    string `json:"side"`  // "front" or "back"
-	Image   string `json:"image"` // base64 encoded PNG
+	CardID string `json:"cardId"`
+	Side   string `json:"side"`  // "front" or "back"
+	Image  string `json:"image"` // data URL or bare base64 PNG
 }
 
 type PDFLayout struct {
