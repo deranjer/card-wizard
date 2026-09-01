@@ -14,3 +14,13 @@ Object.defineProperty(window, 'matchMedia', {
     dispatchEvent: vi.fn(),
   })),
 });
+
+// jsdom has no ResizeObserver; Mantine's FloatingIndicator (Tabs, SegmentedControl)
+// needs it. A no-op stub is enough for render tests.
+if (!('ResizeObserver' in globalThis)) {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}

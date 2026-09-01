@@ -12,7 +12,8 @@ import {
   Drawer,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import {
   IconPlus,
   IconDeviceFloppy,
@@ -29,7 +30,19 @@ import {
   IconTable,
   IconFilePlus,
 } from '@tabler/icons-react';
-import { Game, Deck, DEFAULT_DECK } from '../types';
+import { Game } from '../types';
+import {
+  gameAtom,
+  activeTabAtom,
+  activeDeckIdAtom,
+  activeDeckAtom,
+  updateDeckAtom,
+  renameGameAtom,
+  addDeckAtom,
+  deleteDeckAtom,
+  setGameAtom,
+  resetGameAtom,
+} from '../store/game';
 import { DeckDetails } from './DeckDetails';
 import { StyleEditor } from './StyleEditor';
 import { DeckPreview } from './DeckPreview';
@@ -43,6 +56,96 @@ import { notifications } from '@mantine/notifications';
 import { CardRender } from './CardRender';
 
 export function GameView() {
+  const game = useAtomValue(gameAtom);
+  const activeDeck = useAtomValue(activeDeckAtom);
+  const [activeDeckId, setActiveDeckId] = useAtom(activeDeckIdAtom);
+  const [activeTab, setActiveTab] = useAtom(activeTabAtom);
+
+  const updateDeck = useSetAtom(updateDeckAtom);
+  const renameGame = useSetAtom(renameGameAtom);
+  const addDeck = useSetAtom(addDeckAtom);
+  const deleteDeck = useSetAtom(deleteDeckAtom);
+  const setGame = useSetAtom(setGameAtom);
+  const resetGame = useSetAtom(resetGameAtom);
+
+  const [opened, { toggle }] = useDisclosure();
+  const [sidebarCollapsed, { toggle: toggleSidebar }] = useDisclosure(false);
+  const [helpOpened, { open: openHelp, close: closeHelp }] = useDisclosure(false);
+  const [statsOpened, { open: openStats, close: closeStats }] = useDisclosure(false);
+  const [helpSection, setHelpSection] = useState<string | undefined>();
+
+  const navigateToHelp = (section: string) => {
+    setHelpSection(section);
+    openHelp();
+  };
+
+  // Inject @font-face rules for the active deck's custom fonts.
+  useEffect(() => {
+    const styleId = 'custom-fonts';
+    let styleEl = document.getElementById(styleId);
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = styleId;
+      document.head.appendChild(styleEl);
+    }
+
+    styleEl.textContent = (activeDeck.customFonts || [])
+      .map(
+        (font) => `
+          @font-face {
+            font-family: '${font.family}';
+            src: url('/local-font?path=${encodeURIComponent(font.path)}');
+          }
+        `
+      )
+      .join('\n');
+  }, [activeDeck.customFonts]);
+
+  const handleSaveGame = async () => {
+    try {
+      await SaveGame(game as any);
+      notifications.show({ title: 'Success', message: 'Game saved' });
+    } catch (err) {
+      notifications.show({ title: 'Error', message: String(err), color: 'red' });
+    }
+  };
+
+  const handleNewGame = async () => {
+    if (window.confirm('Do you want to save your current game before starting a new one?')) {
+      await handleSaveGame();
+    }
+    try {
+      await NewGame();
+      resetGame();
+      notifications.show({ title: 'Success', message: 'Started new game' });
+    } catch (err) {
+      notifications.show({ title: 'Error', message: String(err), color: 'red' });
+    }
+  };
+
+  const handleLoadGame = async () => {
+    try {
+      const loadedGame = await LoadGame();
+      if (loadedGame) {
+        // Ensure IDs exist (migration for older saves).
+        const decks = (loadedGame.decks || []).map((d: any, i: number) => ({
+          ...d,
+          id: d.id || `deck-${Date.now().toString(36)}-${i}`,
+        }));
+        setGame({ ...loadedGame, decks } as Game);
+        notifications.show({ title: 'Success', message: 'Game loaded' });
+      }
+    } catch (err) {
+      notifications.show({ title: 'Error', message: String(err), color: 'red' });
+    }
+  };
+
+  const handleDeleteDeck = (id: string) => {
+    if (!deleteDeck(id)) {
+      notifications.show({ title: 'Error', message: 'Cannot delete the last deck', color: 'red' });
+    }
+  };
+
   const handleExportAllDecksImages = async () => {
     try {
       notifications.show({
@@ -64,10 +167,8 @@ export function GameView() {
       const { createRoot } = await import('react-dom/client');
       const html2canvas = (await import('html2canvas-pro')).default;
 
-      // Loop through all decks
       for (const deck of game.decks) {
         for (const card of deck.cards) {
-          // Render Front
           const frontDiv = document.createElement('div');
           container.appendChild(frontDiv);
           const frontRoot = createRoot(frontDiv);
@@ -91,7 +192,6 @@ export function GameView() {
           frontRoot.unmount();
           container.removeChild(frontDiv);
 
-          // Render Back
           const backDiv = document.createElement('div');
           container.appendChild(backDiv);
           const backRoot = createRoot(backDiv);
@@ -150,147 +250,16 @@ export function GameView() {
         color: 'green',
       });
     } catch (err) {
-      notifications.show({
-        title: 'Error',
-        message: String(err),
-        color: 'red',
-      });
+      notifications.show({ title: 'Error', message: String(err), color: 'red' });
     }
   };
 
-  const handleExportAllDecksPDF = async () => {
-    // Placeholder for Excel export integration if needed here
+  const handleExportAllDecksPDF = () => {
     notifications.show({
       title: 'Info',
-      message: 'Excel export available in Spreadsheet view.',
+      message: 'Use the Print tab to generate PDFs.',
       color: 'blue',
     });
-  };
-
-  const handleNewGame = async () => {
-    if (window.confirm('Do you want to save your current game before starting a new one?')) {
-      await handleSaveGame();
-    }
-
-    try {
-      await NewGame();
-      setGame({
-        name: 'New Game',
-        decks: [{ ...DEFAULT_DECK, id: `deck-${Date.now()}` }],
-      });
-      // Reset active deck and tab
-      const newDeckId = `deck-${Date.now()}`;
-      // Note: setGame is async, but we are setting safe defaults.
-      // Ideally we construct the object first.
-      const newGame: Game = {
-        name: 'New Game',
-        decks: [{ ...DEFAULT_DECK, id: newDeckId }],
-      };
-      setGame(newGame);
-      setActiveDeckId(newGame.decks[0].id);
-      setActiveTab('details');
-
-      notifications.show({ title: 'Success', message: 'Started new game' });
-    } catch (err) {
-      notifications.show({ title: 'Error', message: String(err), color: 'red' });
-    }
-  };
-
-  const [opened, { toggle }] = useDisclosure();
-  const [sidebarCollapsed, { toggle: toggleSidebar }] = useDisclosure(false);
-  const [helpOpened, { open: openHelp, close: closeHelp }] = useDisclosure(false);
-  const [statsOpened, { open: openStats, close: closeStats }] = useDisclosure(false);
-  const [game, setGame] = useState<Game>({
-    name: 'New Game',
-    decks: [{ ...DEFAULT_DECK, id: `deck-${Date.now()}` }],
-  });
-  const [activeDeckId, setActiveDeckId] = useState<string>(game.decks[0].id);
-  const [activeTab, setActiveTab] = useState<string | null>('details');
-  const [helpSection, setHelpSection] = useState<string | undefined>();
-
-  const activeDeck = game.decks.find((d) => d.id === activeDeckId) || game.decks[0];
-
-  const navigateToHelp = (section: string) => {
-    setHelpSection(section);
-    openHelp();
-  };
-
-  useEffect(() => {
-    // Clean up old styles
-    const styleId = 'custom-fonts';
-    let styleEl = document.getElementById(styleId);
-    if (!styleEl) {
-      styleEl = document.createElement('style');
-      styleEl.id = styleId;
-      document.head.appendChild(styleEl);
-    }
-
-    const css = (activeDeck.customFonts || [])
-      .map(
-        (font) => `
-          @font-face {
-            font-family: '${font.family}';
-            src: url('/local-font?path=${encodeURIComponent(font.path)}');
-          }
-        `
-      )
-      .join('\n');
-
-    styleEl.textContent = css;
-  }, [activeDeck.customFonts]);
-
-  const handleAddDeck = () => {
-    const newDeck = {
-      ...DEFAULT_DECK,
-      id: `deck-${Date.now()}`,
-      name: `New Deck ${game.decks.length + 1}`,
-    };
-    setGame({ ...game, decks: [...game.decks, newDeck] });
-    setActiveDeckId(newDeck.id);
-  };
-
-  const handleDeleteDeck = (id: string) => {
-    if (game.decks.length <= 1) {
-      notifications.show({ title: 'Error', message: 'Cannot delete the last deck', color: 'red' });
-      return;
-    }
-    const newDecks = game.decks.filter((d) => d.id !== id);
-    setGame({ ...game, decks: newDecks });
-    if (activeDeckId === id) {
-      setActiveDeckId(newDecks[0].id);
-    }
-  };
-
-  const updateDeck = (updatedDeck: Deck) => {
-    const newDecks = game.decks.map((d) => (d.id === updatedDeck.id ? updatedDeck : d));
-    setGame({ ...game, decks: newDecks });
-  };
-
-  const handleSaveGame = async () => {
-    try {
-      await SaveGame(game as any);
-      notifications.show({ title: 'Success', message: 'Game saved' });
-    } catch (err) {
-      notifications.show({ title: 'Error', message: String(err), color: 'red' });
-    }
-  };
-
-  const handleLoadGame = async () => {
-    try {
-      const loadedGame = await LoadGame();
-      if (loadedGame) {
-        // Ensure IDs exist (migration)
-        const decks = (loadedGame.decks || []).map((d: any, i: number) => ({
-          ...d,
-          id: d.id || `deck-${Date.now()}-${i}`,
-        }));
-        setGame({ ...loadedGame, decks } as Game);
-        setActiveDeckId(decks[0].id);
-        notifications.show({ title: 'Success', message: 'Game loaded' });
-      }
-    } catch (err) {
-      notifications.show({ title: 'Error', message: String(err), color: 'red' });
-    }
   };
 
   return (
@@ -317,7 +286,7 @@ export function GameView() {
             <IconCards size={30} />
             <TextInput
               value={game.name}
-              onChange={(e) => setGame({ ...game, name: e.currentTarget.value })}
+              onChange={(e) => renameGame(e.currentTarget.value)}
               variant="unstyled"
               size="lg"
               fw={700}
@@ -348,20 +317,17 @@ export function GameView() {
                 <Menu.Label>Export All Decks</Menu.Label>
                 <Menu.Item
                   leftSection={<IconFileTypePdf size={14} />}
-                  onClick={() => handleExportAllDecksPDF()}
+                  onClick={handleExportAllDecksPDF}
                 >
                   Export as PDF
                 </Menu.Item>
                 <Menu.Item
                   leftSection={<IconPhoto size={14} />}
-                  onClick={() => handleExportAllDecksImages()}
+                  onClick={handleExportAllDecksImages}
                 >
                   Export as Images
                 </Menu.Item>
-                <Menu.Item
-                  leftSection={<IconTable size={14} />}
-                  onClick={() => handleExportAllDecksXLSX()}
-                >
+                <Menu.Item leftSection={<IconTable size={14} />} onClick={handleExportAllDecksXLSX}>
                   Export to Excel
                 </Menu.Item>
               </Menu.Dropdown>
@@ -382,7 +348,7 @@ export function GameView() {
       <AppShell.Navbar p="md">
         <Group justify={sidebarCollapsed ? 'center' : 'space-between'} mb="md">
           {!sidebarCollapsed && <Text fw={500}>Decks</Text>}
-          <ActionIcon variant="light" onClick={handleAddDeck} title="Add Deck">
+          <ActionIcon variant="light" onClick={() => addDeck()} title="Add Deck">
             <IconPlus size={16} />
           </ActionIcon>
         </Group>
@@ -428,7 +394,7 @@ export function GameView() {
 
           <Tabs.Panel value="details">
             <DeckDetails
-              key={activeDeck.id} // Force re-mount on deck switch to reset internal state if needed
+              key={activeDeck.id} // Re-mount on deck switch to reset internal state
               deck={activeDeck}
               setDeck={updateDeck}
               onNavigateToHelp={navigateToHelp}

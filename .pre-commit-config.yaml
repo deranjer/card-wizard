@@ -5,10 +5,12 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
     hooks:
+      # Wails regenerates wailsjs/ (trailing tabs) and package.json.md5 (no
+      # final newline) on every build; leave those generated files alone.
       - id: trailing-whitespace
-        exclude: ^frontend/wailsjs/  # Wails-generated; regen re-adds trailing tabs
+        exclude: ^frontend/(wailsjs/|package\.json\.md5$)
       - id: end-of-file-fixer
-        exclude: ^frontend/wailsjs/
+        exclude: ^frontend/(wailsjs/|package\.json\.md5$)
       - id: check-yaml
       - id: check-added-large-files
       - id: check-merge-conflict
