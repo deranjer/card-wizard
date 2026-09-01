@@ -1,0 +1,36 @@
+version: "2"
+
+run:
+  timeout: 3m
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - unparam
+    - misspell
+  exclusions:
+    generated: lax
+    presets:
+      - std-error-handling
+    rules:
+      # internal/archive is rewritten and hardened in Phase 6 (Walk-error
+      # propagation, Zip-Slip guard, sane perms). Until then, don't block CI on
+      # its known errcheck debt.
+      - path: internal/archive/
+        linters:
+          - errcheck
+      # app.go's Excel export path (ExportXLSX/ExportGameXLSX) is deduplicated in
+      # Phase 4 and its error handling is done in Phase 6. GetPDFLayout's nil
+      # error is part of that same signature cleanup. Baseline until then.
+      - path: app.go
+        linters:
+          - errcheck
+          - unparam
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

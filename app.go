@@ -176,7 +176,7 @@ func (a *App) ImportCardsWithMapping(filePath string, sheetName string, mapping 
 			mapping["frontStyle"]: true,
 			mapping["backStyle"]:  true,
 		}
-		// NOTE: We explicilty DO NOT add mapping["generateIdFrom"] to systemCols
+		// NOTE: We explicitly DO NOT add mapping["generateIdFrom"] to systemCols
 		// because the user wants to preserve that column in the data.
 
 		for j, cell := range row {
@@ -469,7 +469,9 @@ func (a *App) NewGame() {
 	a.workingDir = tempDir
 
 	// Pre-create images directory
-	os.MkdirAll(filepath.Join(a.workingDir, "images"), 0755)
+	if err := os.MkdirAll(filepath.Join(a.workingDir, "images"), 0755); err != nil {
+		fmt.Printf("Failed to create images directory: %v\n", err)
+	}
 }
 
 // GeneratePDF generates a PDF for the deck

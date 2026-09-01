@@ -6,12 +6,14 @@ repos:
     rev: v4.5.0
     hooks:
       - id: trailing-whitespace
+        exclude: ^frontend/wailsjs/  # Wails-generated; regen re-adds trailing tabs
       - id: end-of-file-fixer
+        exclude: ^frontend/wailsjs/
       - id: check-yaml
       - id: check-added-large-files
       - id: check-merge-conflict
       - id: check-json
-        exclude: ^frontend/tsconfig\.json$  # tsconfig.json may have comments
+        exclude: ^frontend/tsconfig(\.node)?\.json$  # tsconfig may have comments
 
   # Go hooks
   - repo: https://github.com/dnephin/pre-commit-golang
@@ -22,20 +24,58 @@ repos:
         entry: go fmt ./...
         language: system
         pass_filenames: false
-      - id: go-vet
       - id: go-imports
         name: goimports
         entry: goimports -w
         language: system
         types: [go]
         pass_filenames: true
-      - id: go-unit-tests
-      - id: go-build
       - id: go-mod-tidy
 
-  # Frontend hooks (JavaScript/TypeScript)
   - repo: local
     hooks:
+      # Package patterns are explicit (not ./...) so Go tooling never descends
+      # into frontend/node_modules, which vendors a stray flatted/*.go package.
+      - id: go-vet
+        name: go vet
+        entry: go vet . ./internal/...
+        language: system
+        types: [go]
+        pass_filenames: false
+      - id: go-build
+        name: go build
+        entry: go build . ./internal/...
+        language: system
+        types: [go]
+        pass_filenames: false
+      - id: go-unit-tests
+        name: go test
+        entry: go test . ./internal/...
+        language: system
+        types: [go]
+        pass_filenames: false
+      - id: golangci-lint
+        name: golangci-lint
+        entry: golangci-lint run
+        language: system
+        types: [go]
+        pass_filenames: false
+
+      # Frontend hooks (JavaScript/TypeScript)
+      - id: frontend-lint
+        name: Frontend Lint
+        entry: bash -c 'cd frontend && npm run lint'
+        language: system
+        pass_filenames: false
+        files: ^frontend/.*\.(ts|tsx)$
+
+      - id: frontend-format
+        name: Frontend Format Check
+        entry: bash -c 'cd frontend && npm run format:check'
+        language: system
+        pass_filenames: false
+        files: ^frontend/(src/|[^/]*\.(json|c?js|mjs))
+
       - id: frontend-tests
         name: Frontend Tests
         entry: bash -c 'cd frontend && npm test'

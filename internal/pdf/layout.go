@@ -75,7 +75,7 @@ func CalculateLayout(d deck.Deck) deck.PDFLayout {
 		if count < 9 {
 			c, r, n := calc(minMargin, 0)
 			if n > count {
-				cols, rows, count = c, r, n
+				cols, rows = c, r
 				finalSpacing = 0
 			}
 		}
