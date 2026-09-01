@@ -1,7 +1,8 @@
-import html2canvas from 'html2canvas';
-
 /**
- * Renders a card DOM element to a base64 PNG image
+ * Renders a card DOM element to a base64 PNG image.
+ *
+ * html2canvas-pro is loaded lazily so the (large) rasteriser stays out of the
+ * initial bundle and only downloads when an export is actually run.
  */
 export async function renderCardToImage(
   cardElement: HTMLElement,
@@ -9,6 +10,7 @@ export async function renderCardToImage(
   height: number
 ): Promise<string> {
   try {
+    const { default: html2canvas } = await import('html2canvas-pro');
     const canvas = await html2canvas(cardElement, {
       width,
       height,

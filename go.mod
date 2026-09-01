@@ -3,7 +3,7 @@ module card_wizard
 go 1.24.0
 
 require (
-	github.com/jung-kurt/gofpdf v1.16.2
+	github.com/go-pdf/fpdf v0.9.0
 	github.com/wailsapp/wails/v2 v2.11.0
 	github.com/xuri/excelize/v2 v2.10.0
 )
