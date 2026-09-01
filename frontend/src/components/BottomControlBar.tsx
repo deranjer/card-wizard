@@ -33,7 +33,9 @@ import { AssetGallery } from './AssetGallery';
 
 interface BottomControlBarProps {
   selectedElement: LayoutElement | null | undefined;
-  updateElement: (id: string, updates: Partial<LayoutElement>) => void;
+  /** `transient: true` applies the change live without adding an undo step;
+   *  used while dragging a colour picker. Commit once (no flag) on release. */
+  updateElement: (id: string, updates: Partial<LayoutElement>, transient?: boolean) => void;
   removeElement: (id: string) => void;
   duplicateElement: (elementId: string, targetStyleIds: string[]) => void;
   deck: Deck;
@@ -186,7 +188,8 @@ export function BottomControlBar({
                 />
                 <ColorInput
                   value={selectedElement.color}
-                  onChange={(val) => updateElement(selectedElement.id, { color: val })}
+                  onChange={(val) => updateElement(selectedElement.id, { color: val }, true)}
+                  onChangeEnd={(val) => updateElement(selectedElement.id, { color: val })}
                   size="xs"
                 />
               </Group>
@@ -330,13 +333,15 @@ export function BottomControlBar({
               <ColorInput
                 label="Fill"
                 value={selectedElement.fillColor || '#cccccc'}
-                onChange={(val) => updateElement(selectedElement.id, { fillColor: val })}
+                onChange={(val) => updateElement(selectedElement.id, { fillColor: val }, true)}
+                onChangeEnd={(val) => updateElement(selectedElement.id, { fillColor: val })}
                 size="xs"
               />
               <ColorInput
                 label="Stroke"
                 value={selectedElement.strokeColor || ''}
-                onChange={(val) => updateElement(selectedElement.id, { strokeColor: val })}
+                onChange={(val) => updateElement(selectedElement.id, { strokeColor: val }, true)}
+                onChangeEnd={(val) => updateElement(selectedElement.id, { strokeColor: val })}
                 size="xs"
                 placeholder="None"
               />

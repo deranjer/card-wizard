@@ -1,8 +1,9 @@
 import { memo } from 'react';
-import { Table, TextInput, NumberInput, Select, Group, ActionIcon } from '@mantine/core';
+import { Table, NumberInput, Select, Group, ActionIcon } from '@mantine/core';
 import { IconTrash, IconFolder } from '@tabler/icons-react';
 import type { Card, FieldDefinition } from '../../types';
 import { ImageLoader } from '../ImageLoader';
+import { DebouncedTextCell } from './DebouncedTextCell';
 
 export interface SheetRowProps {
   card: Card;
@@ -40,9 +41,9 @@ function SheetRowImpl({
   return (
     <Table.Tr>
       <Table.Td>
-        <TextInput
+        <DebouncedTextCell
           value={card.id}
-          onChange={(e) => onChangeId(card.id, e.currentTarget.value)}
+          onCommit={(v) => onChangeId(card.id, v)}
           variant="unstyled"
           size={size}
           styles={cellInput}
@@ -60,9 +61,9 @@ function SheetRowImpl({
       </Table.Td>
       <Table.Td>
         {showRawValues ? (
-          <TextInput
+          <DebouncedTextCell
             value={card.frontStyleId || ''}
-            onChange={(e) => onChangeMeta(card.id, 'frontStyleId', e.currentTarget.value)}
+            onCommit={(v) => onChangeMeta(card.id, 'frontStyleId', v)}
             variant="unstyled"
             size={size}
             placeholder="default-front"
@@ -87,9 +88,9 @@ function SheetRowImpl({
       </Table.Td>
       <Table.Td>
         {showRawValues ? (
-          <TextInput
+          <DebouncedTextCell
             value={card.backStyleId || ''}
-            onChange={(e) => onChangeMeta(card.id, 'backStyleId', e.currentTarget.value)}
+            onCommit={(v) => onChangeMeta(card.id, 'backStyleId', v)}
             variant="unstyled"
             size={size}
             placeholder="default-back"
@@ -115,9 +116,9 @@ function SheetRowImpl({
       {fields.map((field) => (
         <Table.Td key={field.name}>
           {field.type === 'text' ? (
-            <TextInput
+            <DebouncedTextCell
               value={card.data[field.name] || ''}
-              onChange={(e) => onChangeData(card.id, field.name, e.currentTarget.value)}
+              onCommit={(v) => onChangeData(card.id, field.name, v)}
               variant="unstyled"
               size={size}
               styles={cellInput}
@@ -135,10 +136,10 @@ function SheetRowImpl({
                   }}
                 />
               )}
-              <TextInput
+              <DebouncedTextCell
                 placeholder="Image URL/Path"
                 value={card.data[field.name] || ''}
-                onChange={(e) => onChangeData(card.id, field.name, e.currentTarget.value)}
+                onCommit={(v) => onChangeData(card.id, field.name, v)}
                 variant="unstyled"
                 size={size}
                 style={{ flex: 1 }}

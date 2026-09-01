@@ -10,8 +10,9 @@ import {
   Title,
 } from '@mantine/core';
 import { Deck } from '../types';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { CardRender } from './CardRender';
+import { LazyCard } from './preview/LazyCard';
 import {
   IconZoomIn,
   IconZoomOut,
@@ -32,11 +33,11 @@ export function DeckPreview({ deck, onNavigateToHelp }: DeckPreviewProps) {
   const [zoom, setZoom] = useState(1);
   const [previewMode, setPreviewMode] = useState<'front' | 'back'>('front');
 
-  const handleCardClick = (index: number) => {
+  const handleCardClick = useCallback((index: number) => {
     setSelectedCardIndex(index);
     setOpened(true);
     setZoom(1);
-  };
+  }, []);
 
   const nextCard = () => {
     if (selectedCardIndex !== null && selectedCardIndex < deck.cards.length - 1) {
@@ -78,12 +79,14 @@ export function DeckPreview({ deck, onNavigateToHelp }: DeckPreviewProps) {
         </Group>
         <SimpleGrid cols={{ base: 2, sm: 3, md: 4, lg: 5 }} spacing="md">
           {deck.cards.map((card, index) => (
-            <div key={card.id} onClick={() => handleCardClick(index)} style={{ cursor: 'pointer' }}>
-              <CardRender card={card} deck={deck} mode={previewMode} scale={1} />
-              <Text size="xs" ta="center" mt={4} c="dimmed">
-                {card.id} (x{card.count || 1})
-              </Text>
-            </div>
+            <LazyCard
+              key={card.id}
+              card={card}
+              deck={deck}
+              mode={previewMode}
+              index={index}
+              onClick={handleCardClick}
+            />
           ))}
         </SimpleGrid>
       </Stack>

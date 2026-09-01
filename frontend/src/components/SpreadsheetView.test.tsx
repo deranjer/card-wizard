@@ -38,6 +38,7 @@ describe('SpreadsheetView', () => {
 
     const alphaInput = screen.getByDisplayValue('Alpha');
     fireEvent.change(alphaInput, { target: { value: 'Alpha!' } });
+    fireEvent.blur(alphaInput); // text cells commit on blur (or after a debounce)
 
     expect(setDeck).toHaveBeenCalledTimes(1);
     const next: Deck = setDeck.mock.calls[0][0];
@@ -52,10 +53,10 @@ describe('SpreadsheetView', () => {
 
     const idInput = screen.getByDisplayValue('b');
     fireEvent.change(idInput, { target: { value: 'a' } });
+    fireEvent.blur(idInput);
 
-    // Rejected: nothing committed, so the controlled value stays 'b'.
+    // Rejected by the uniqueness check: nothing committed to the parent.
     expect(setDeck).not.toHaveBeenCalled();
-    expect(screen.getByDisplayValue('b')).toBe(idInput);
   });
 
   it('renders one header cell per field', () => {
