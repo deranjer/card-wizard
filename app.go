@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -371,6 +372,8 @@ func (a *App) SaveGame(g game.Game) error {
 		g.Decks[i] = a.convertPathsToRelative(g.Decks[i], a.workingDir)
 	}
 
+	g.Stamp() // record the schema version we're writing
+
 	// Always save game.json to working directory first
 	data, err := json.MarshalIndent(g, "", "  ")
 	if err != nil {
@@ -421,11 +424,10 @@ func (a *App) LoadGame() (*game.Game, error) {
 			return nil, fmt.Errorf("failed to read game.json from archive: %w", err)
 		}
 
-		var g game.Game
-		if err := json.Unmarshal(data, &g); err != nil {
+		g, err := game.Load(data)
+		if err != nil {
 			return nil, fmt.Errorf("failed to parse game.json: %w", err)
 		}
-
 		return &g, nil
 	}
 
@@ -436,24 +438,10 @@ func (a *App) LoadGame() (*game.Game, error) {
 		return nil, err
 	}
 
-	var g game.Game
-	if err := json.Unmarshal(data, &g); err != nil {
-		// Fallback: Try to load as a single Deck and wrap it in a Game
-		var d deck.Deck
-		if err2 := json.Unmarshal(data, &d); err2 == nil {
-			// It's a deck!
-			if d.ID == "" {
-				d.ID = "deck-1" // Assign a default ID
-			}
-			g = game.Game{
-				Name:  d.Name,
-				Decks: []deck.Deck{d},
-			}
-		} else {
-			return nil, err // Return original error
-		}
+	g, err := game.Load(data)
+	if err != nil {
+		return nil, err
 	}
-
 	return &g, nil
 }
 
@@ -698,9 +686,10 @@ func (a *App) SelectFontFile() (string, error) {
 	return selection, err
 }
 
-// LoadImageAsDataURL reads a local image file and returns base64 content
+// LoadImageAsDataURL reads a local image file and returns it as a base64 data
+// URL with a MIME type derived from the extension (falling back to content
+// sniffing), rather than always claiming image/png.
 func (a *App) LoadImageAsDataURL(path string) (string, error) {
-	// Resolve relative paths against the deck directory
 	resolvedPath := a.ResolveImagePath(path)
 
 	data, err := os.ReadFile(resolvedPath)
@@ -708,8 +697,31 @@ func (a *App) LoadImageAsDataURL(path string) (string, error) {
 		return "", err
 	}
 
-	mimeType := "image/png" // default
+	mimeType := imageMIME(resolvedPath, data)
 	return fmt.Sprintf("data:%s;base64,%s", mimeType, base64.StdEncoding.EncodeToString(data)), nil
+}
+
+// imageMIME picks a MIME type for an image, preferring the file extension and
+// falling back to sniffing the first bytes.
+func imageMIME(path string, data []byte) string {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	case ".bmp":
+		return "image/bmp"
+	case ".svg":
+		return "image/svg+xml"
+	}
+	if ct := http.DetectContentType(data); strings.HasPrefix(ct, "image/") {
+		return ct
+	}
+	return "application/octet-stream"
 }
 
 // GetPDFLayout returns the layout configuration for the PDF
@@ -766,39 +778,42 @@ func (a *App) ResolveImagePath(path string) string {
 	return filepath.Join(a.workingDir, path)
 }
 
-// convertPathsToRelative converts all absolute image paths in a deck to relative paths
+// convertPathsToRelative rewrites absolute paths stored in a deck's image
+// fields to be relative to deckDir.
 func (a *App) convertPathsToRelative(d deck.Deck, deckDir string) deck.Deck {
-	// Convert paths in card data
-	for i := range d.Cards {
-		d.Cards[i].Data = a.convertMapPathsToRelative(d.Cards[i].Data, deckDir)
+	imageFields := make(map[string]bool)
+	for _, f := range d.Fields {
+		if f.Type == "image" {
+			imageFields[f.Name] = true
+		}
 	}
-
+	for i := range d.Cards {
+		d.Cards[i].Data = relativizeImagePaths(d.Cards[i].Data, imageFields, deckDir)
+	}
 	return d
 }
 
-// convertMapPathsToRelative converts absolute paths in a map to relative paths
-func (a *App) convertMapPathsToRelative(data map[string]interface{}, deckDir string) map[string]interface{} {
-	result := make(map[string]interface{})
-
-	for key, value := range data {
-		if strValue, ok := value.(string); ok {
-			// Check if this looks like a file path (contains path separators or drive letters)
-			if strings.Contains(strValue, string(filepath.Separator)) || strings.Contains(strValue, "/") || strings.Contains(strValue, ":\\") {
-				// Try to make it relative
-				if filepath.IsAbs(strValue) {
-					relPath, err := filepath.Rel(deckDir, strValue)
-					if err == nil {
-						// Successfully made relative - use forward slashes for cross-platform compatibility
-						relPath = filepath.ToSlash(relPath)
-						result[key] = relPath
-						continue
-					}
-				}
-			}
-		}
-		// Keep value as-is if not a convertible path
-		result[key] = value
+// relativizeImagePaths converts absolute paths held in image-typed fields to
+// forward-slashed paths relative to deckDir. Non-image fields are left as-is so
+// ordinary text that happens to contain a slash is never mangled (the old
+// "contains a separator" heuristic rewrote those too).
+func relativizeImagePaths(data map[string]any, imageFields map[string]bool, deckDir string) map[string]any {
+	if len(data) == 0 {
+		return data
 	}
-
-	return result
+	out := make(map[string]any, len(data))
+	for key, value := range data {
+		out[key] = value
+		if !imageFields[key] {
+			continue
+		}
+		s, ok := value.(string)
+		if !ok || !filepath.IsAbs(s) {
+			continue
+		}
+		if rel, err := filepath.Rel(deckDir, s); err == nil {
+			out[key] = filepath.ToSlash(rel)
+		}
+	}
+	return out
 }

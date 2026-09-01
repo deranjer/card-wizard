@@ -277,6 +277,7 @@ export namespace deck {
 export namespace game {
 	
 	export class Game {
+	    schemaVersion: number;
 	    name: string;
 	    decks: deck.Deck[];
 	
@@ -286,6 +287,7 @@ export namespace game {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.schemaVersion = source["schemaVersion"];
 	        this.name = source["name"];
 	        this.decks = this.convertValues(source["decks"], deck.Deck);
 	    }
