@@ -17,7 +17,7 @@ import { Deck, CardLayout, LayoutElement } from '../types';
 import { CardRender } from './CardRender';
 import { ImageLoader } from './ImageLoader';
 import { BottomControlBar } from './BottomControlBar';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Rnd } from 'react-rnd';
 import {
   IconPlus,
@@ -108,21 +108,26 @@ export function StyleEditor({ deck: externalDeck, setDeck: setExternalDeck }: St
     canRedo,
   } = useHistory(externalDeck);
 
-  // Sync external changes (e.g. from other tabs) to local state
-  // This is critical: if the deck is updated elsewhere (e.g. XLSX import in Deck Details),
-  // we need to update our local history state, otherwise we'll overwrite with stale data
+  // Local history is the source of truth while the editor is mounted. We push
+  // local changes out to the parent and only pull the parent's deck back in if
+  // it changed for a reason *other* than our own echo (tracked via lastPushed).
+  // Without this guard the outbound write bounced straight back through here as
+  // a fresh object and re-set local state on every edit.
+  const lastPushed = useRef(externalDeck);
+
   useEffect(() => {
-    // Only update if the external deck is actually different (deep comparison would be ideal, but reference check is safer)
-    // We use setSilent to avoid creating history entries for external updates
-    if (externalDeck !== deck) {
+    if (externalDeck !== lastPushed.current) {
+      lastPushed.current = externalDeck;
       setDeckSilent(externalDeck);
     }
-  }, [externalDeck]);
+  }, [externalDeck, setDeckSilent]);
 
-  // Propagate local changes to parent
   useEffect(() => {
-    setExternalDeck(deck);
-  }, [deck]);
+    if (deck !== lastPushed.current) {
+      lastPushed.current = deck;
+      setExternalDeck(deck);
+    }
+  }, [deck, setExternalDeck]);
 
   // Hotkeys
   useEffect(() => {
@@ -151,7 +156,6 @@ export function StyleEditor({ deck: externalDeck, setDeck: setExternalDeck }: St
   const [selectedStyleId, setSelectedStyleId] = useState<string | null>(null);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [zoom] = useState(1);
-  const [renderKey, setRenderKey] = useState(0);
   const [canvasReady, setCanvasReady] = useState(false);
   const [draggedPoint, setDraggedPoint] = useState<{
     elementId: string;
@@ -173,8 +177,10 @@ export function StyleEditor({ deck: externalDeck, setDeck: setExternalDeck }: St
   const [previewOpacity, setPreviewOpacity] = useState(0.5);
 
   const observerRef = useRef<ResizeObserver | null>(null);
+  const canvasElRef = useRef<HTMLDivElement | null>(null);
 
   const setCanvasRef = useCallback((node: HTMLDivElement | null) => {
+    canvasElRef.current = node;
     // Cleanup previous observer
     if (observerRef.current) {
       observerRef.current.disconnect();
@@ -208,13 +214,6 @@ export function StyleEditor({ deck: externalDeck, setDeck: setExternalDeck }: St
       setSelectedStyleId(ids[0]);
     }
   }, [activeTab, deck.frontStyles, deck.backStyles]);
-
-  // Force re-render when selectedStyleId changes
-  useEffect(() => {
-    if (selectedStyleId) {
-      setRenderKey((prev) => prev + 1);
-    }
-  }, [selectedStyleId]);
 
   // Clear preview if selected card doesn't match current style
   useEffect(() => {
@@ -252,6 +251,40 @@ export function StyleEditor({ deck: externalDeck, setDeck: setExternalDeck }: St
       ? deck.frontStyles[selectedStyleId]
       : deck.backStyles[selectedStyleId]
     : null;
+
+  // Cards whose effective style (with CardRender's fallback rules) is the one
+  // being edited. Memoised: it was re-filtering every card on every render,
+  // including during element drags.
+  const filteredCards = useMemo(() => {
+    const styles = activeTab === 'front' ? deck.frontStyles : deck.backStyles;
+    const defaultId =
+      activeTab === 'front'
+        ? deck.defaultFrontStyleId || 'default-front'
+        : deck.defaultBackStyleId || 'default-back';
+    const allIds = Object.keys(styles);
+    return deck.cards.filter((c) => {
+      if (!selectedStyleId) return true;
+      let cardStyleId = activeTab === 'front' ? c.frontStyleId : c.backStyleId;
+      if (!cardStyleId || !styles[cardStyleId]) {
+        cardStyleId = styles[defaultId] ? defaultId : allIds[0];
+      }
+      return cardStyleId === selectedStyleId;
+    });
+  }, [
+    deck.cards,
+    deck.frontStyles,
+    deck.backStyles,
+    deck.defaultFrontStyleId,
+    deck.defaultBackStyleId,
+    activeTab,
+    selectedStyleId,
+  ]);
+
+  // Options for the style <Select>, rebuilt only when the style set changes.
+  const styleSelectData = useMemo(() => {
+    const styles = activeTab === 'front' ? deck.frontStyles : deck.backStyles;
+    return Object.keys(styles).map((id) => ({ value: id, label: styles[id].name }));
+  }, [activeTab, deck.frontStyles, deck.backStyles]);
 
   const handleStyleChange = (newLayout: CardLayout) => {
     if (!selectedStyleId) return;
@@ -540,57 +573,55 @@ export function StyleEditor({ deck: externalDeck, setDeck: setExternalDeck }: St
     points: { x: number; y: number }[];
   } | null>(null);
 
+  // Values the drag handlers read, kept in a ref so the window listeners are
+  // registered once per drag (deps: [draggedPoint]) instead of being torn down
+  // and re-added on every mousemove (tempPoints used to be a dependency).
+  const dragCtx = useRef({ currentStyle, canvasReady, zoom, tempPoints, updateElement });
+  dragCtx.current = { currentStyle, canvasReady, zoom, tempPoints, updateElement };
+
   useEffect(() => {
+    if (!draggedPoint) return;
+
     const handleMouseMove = (e: MouseEvent) => {
-      if (!draggedPoint || !currentStyle || !canvasReady) return;
-      const el = currentStyle.elements.find((e) => e.id === draggedPoint.elementId);
+      const { currentStyle, canvasReady, zoom, tempPoints } = dragCtx.current;
+      if (!currentStyle || !canvasReady) return;
+      const el = currentStyle.elements.find((x) => x.id === draggedPoint.elementId);
       if (!el || !el.points) return;
 
-      const canvas = document.querySelector('.card-editor-canvas') as HTMLElement;
+      const canvas = canvasElRef.current;
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
 
-      const scale = zoom;
-
-      // Use temp points if they exist, otherwise source
       const currentPoints = tempPoints && tempPoints.id === el.id ? tempPoints.points : el.points;
+      const elX = el.x * MM_TO_PX * zoom;
+      const elY = el.y * MM_TO_PX * zoom;
+      const elW = el.width * MM_TO_PX * zoom;
+      const elH = el.height * MM_TO_PX * zoom;
 
-      const elX = el.x * MM_TO_PX * scale;
-      const elY = el.y * MM_TO_PX * scale;
-      const elW = el.width * MM_TO_PX * scale;
-      const elH = el.height * MM_TO_PX * scale;
-
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
-
-      const newX = (mouseX - elX) / elW;
-      const newY = (mouseY - elY) / elH;
+      const newX = (e.clientX - rect.left - elX) / elW;
+      const newY = (e.clientY - rect.top - elY) / elH;
 
       const newPoints = [...currentPoints];
       newPoints[draggedPoint.pointIndex] = { x: newX, y: newY };
-
-      // Update temp state only
       setTempPoints({ id: el.id, points: newPoints });
     };
 
     const handleMouseUp = () => {
-      if (draggedPoint && tempPoints && tempPoints.id === draggedPoint.elementId) {
-        // Commit final state to deck (history)
+      const { tempPoints, updateElement } = dragCtx.current;
+      if (tempPoints && tempPoints.id === draggedPoint.elementId) {
         updateElement(draggedPoint.elementId, { points: tempPoints.points });
       }
       setDraggedPoint(null);
       setTempPoints(null);
     };
 
-    if (draggedPoint) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-    }
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [draggedPoint, currentStyle, zoom, canvasReady, deck, tempPoints]); // Added tempPoints dependency
+  }, [draggedPoint]);
 
   if (!currentStyle) return <Text>No styles defined.</Text>;
 
@@ -600,31 +631,6 @@ export function StyleEditor({ deck: externalDeck, setDeck: setExternalDeck }: St
   const scale = zoom;
   const cardWidthPx = deck.width * MM_TO_PX * scale;
   const cardHeightPx = deck.height * MM_TO_PX * scale;
-
-  const filteredCards = deck.cards.filter((c) => {
-    if (!selectedStyleId) return true;
-
-    const styles = activeTab === 'front' ? deck.frontStyles : deck.backStyles;
-    let cardStyleId = activeTab === 'front' ? c.frontStyleId : c.backStyleId;
-
-    // Fallback logic matching CardRender
-    if (!cardStyleId || !styles[cardStyleId]) {
-      const defaultId =
-        activeTab === 'front'
-          ? deck.defaultFrontStyleId || 'default-front'
-          : deck.defaultBackStyleId || 'default-back';
-      if (styles[defaultId]) {
-        cardStyleId = defaultId;
-      } else {
-        const allIds = Object.keys(styles);
-        if (allIds.length > 0) {
-          cardStyleId = allIds[0];
-        }
-      }
-    }
-
-    return cardStyleId === selectedStyleId;
-  });
 
   return (
     <>
@@ -643,13 +649,7 @@ export function StyleEditor({ deck: externalDeck, setDeck: setExternalDeck }: St
           <Group>
             <Select
               label="Select Style"
-              data={Object.keys(activeTab === 'front' ? deck.frontStyles : deck.backStyles).map(
-                (id) => ({
-                  value: id,
-                  label:
-                    activeTab === 'front' ? deck.frontStyles[id].name : deck.backStyles[id].name,
-                })
-              )}
+              data={styleSelectData}
               value={selectedStyleId}
               onChange={setSelectedStyleId}
               style={{ flex: 1 }}
@@ -864,7 +864,7 @@ export function StyleEditor({ deck: externalDeck, setDeck: setExternalDeck }: St
             <Center py={50} style={{ minHeight: '100%' }}>
               <div
                 ref={setCanvasRef}
-                key={`canvas-${selectedStyleId}-${activeTab}-${renderKey}`}
+                key={`canvas-${selectedStyleId}-${activeTab}`}
                 style={{
                   width: cardWidthPx,
                   height: cardHeightPx,

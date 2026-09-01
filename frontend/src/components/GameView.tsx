@@ -53,7 +53,6 @@ import { DeckExport } from './DeckExport';
 import { KeyStatsModal } from './KeyStatsModal';
 import { SaveGame, LoadGame, NewGame, SaveImages, ExportGameXLSX } from '../../wailsjs/go/main/App';
 import { notifications } from '@mantine/notifications';
-import { CardRender } from './CardRender';
 
 export function GameView() {
   const game = useAtomValue(gameAtom);
@@ -156,69 +155,8 @@ export function GameView() {
         id: 'export-all-images',
       });
 
-      const container = document.createElement('div');
-      container.style.position = 'absolute';
-      container.style.top = '-9999px';
-      container.style.left = '-9999px';
-      container.style.width = 'fit-content';
-      document.body.appendChild(container);
-
-      const images: Record<string, string> = {};
-      const { createRoot } = await import('react-dom/client');
-      const html2canvas = (await import('html2canvas-pro')).default;
-
-      for (const deck of game.decks) {
-        for (const card of deck.cards) {
-          const frontDiv = document.createElement('div');
-          container.appendChild(frontDiv);
-          const frontRoot = createRoot(frontDiv);
-
-          await new Promise<void>((resolve) => {
-            frontRoot.render(
-              <div style={{ width: 'fit-content', height: 'fit-content', background: 'white' }}>
-                <CardRender deck={deck} card={card} mode="front" scale={1} />
-              </div>
-            );
-            setTimeout(resolve, 100);
-          });
-
-          const frontCanvas = await html2canvas(frontDiv.firstChild as HTMLElement, {
-            backgroundColor: null,
-            logging: false,
-            useCORS: true,
-            scale: 2,
-          });
-          images[`${deck.name}-${card.id}-front.png`] = frontCanvas.toDataURL('image/png');
-          frontRoot.unmount();
-          container.removeChild(frontDiv);
-
-          const backDiv = document.createElement('div');
-          container.appendChild(backDiv);
-          const backRoot = createRoot(backDiv);
-
-          await new Promise<void>((resolve) => {
-            backRoot.render(
-              <div style={{ width: 'fit-content', height: 'fit-content', background: 'white' }}>
-                <CardRender deck={deck} card={card} mode="back" scale={1} />
-              </div>
-            );
-            setTimeout(resolve, 100);
-          });
-
-          const backCanvas = await html2canvas(backDiv.firstChild as HTMLElement, {
-            backgroundColor: null,
-            logging: false,
-            useCORS: true,
-            scale: 2,
-          });
-          images[`${deck.name}-${card.id}-back.png`] = backCanvas.toDataURL('image/png');
-          backRoot.unmount();
-          container.removeChild(backDiv);
-        }
-      }
-
-      document.body.removeChild(container);
-      await SaveImages(images);
+      const { exportDecksToImages } = await import('../utils/exportImages');
+      await SaveImages(await exportDecksToImages(game.decks, { prefixWithDeckName: true }));
 
       notifications.update({
         id: 'export-all-images',
