@@ -36,10 +36,7 @@ func (g *GeneratorNew) Generate(d deck.Deck, outputPath string) error {
 
 	for i, renderedCard := range d.RenderedCards {
 		// Decode base64 image
-		imageData := renderedCard.Image
-		if strings.HasPrefix(imageData, "data:image/png;base64,") {
-			imageData = strings.TrimPrefix(imageData, "data:image/png;base64,")
-		}
+		imageData := strings.TrimPrefix(renderedCard.Image, "data:image/png;base64,")
 
 		decoded, err := base64.StdEncoding.DecodeString(imageData)
 		if err != nil {

@@ -26,7 +26,7 @@ export function DeckExport({ deck }: DeckExportProps) {
         message: 'Generating images, please wait...',
         loading: true,
         autoClose: false,
-        id: 'export-images'
+        id: 'export-images',
       });
 
       const container = document.createElement('div');
@@ -49,12 +49,7 @@ export function DeckExport({ deck }: DeckExportProps) {
         await new Promise<void>((resolve) => {
           frontRoot.render(
             <div style={{ width: 'fit-content', height: 'fit-content', background: 'white' }}>
-              <CardRender
-                deck={deck}
-                card={card}
-                mode="front"
-                scale={1}
-              />
+              <CardRender deck={deck} card={card} mode="front" scale={1} />
             </div>
           );
           setTimeout(resolve, 100);
@@ -64,7 +59,7 @@ export function DeckExport({ deck }: DeckExportProps) {
           backgroundColor: null,
           logging: false,
           useCORS: true,
-          scale: 2
+          scale: 2,
         });
         images[`${card.id}-front.png`] = frontCanvas.toDataURL('image/png');
         frontRoot.unmount();
@@ -78,12 +73,7 @@ export function DeckExport({ deck }: DeckExportProps) {
         await new Promise<void>((resolve) => {
           backRoot.render(
             <div style={{ width: 'fit-content', height: 'fit-content', background: 'white' }}>
-              <CardRender
-                deck={deck}
-                card={card}
-                mode="back"
-                scale={1}
-              />
+              <CardRender deck={deck} card={card} mode="back" scale={1} />
             </div>
           );
           setTimeout(resolve, 100);
@@ -93,7 +83,7 @@ export function DeckExport({ deck }: DeckExportProps) {
           backgroundColor: null,
           logging: false,
           useCORS: true,
-          scale: 2
+          scale: 2,
         });
         images[`${card.id}-back.png`] = backCanvas.toDataURL('image/png');
         backRoot.unmount();
@@ -109,9 +99,8 @@ export function DeckExport({ deck }: DeckExportProps) {
         message: 'Images exported successfully',
         color: 'green',
         loading: false,
-        autoClose: 3000
+        autoClose: 3000,
       });
-
     } catch (error) {
       console.error(error);
       notifications.update({
@@ -120,7 +109,7 @@ export function DeckExport({ deck }: DeckExportProps) {
         message: 'Failed to export images',
         color: 'red',
         loading: false,
-        autoClose: 3000
+        autoClose: 3000,
       });
     }
   };
@@ -132,7 +121,9 @@ export function DeckExport({ deck }: DeckExportProps) {
           <Stack gap="md">
             <Group justify="space-between" align="flex-start">
               <div>
-                <Text size="lg" fw={600} mb="xs">Export to Excel</Text>
+                <Text size="lg" fw={600} mb="xs">
+                  Export to Excel
+                </Text>
                 <Text size="sm" c="dimmed">
                   Export all cards and their data to an XLSX spreadsheet file.
                 </Text>
@@ -152,7 +143,9 @@ export function DeckExport({ deck }: DeckExportProps) {
           <Stack gap="md">
             <Group justify="space-between" align="flex-start">
               <div>
-                <Text size="lg" fw={600} mb="xs">Export as Images</Text>
+                <Text size="lg" fw={600} mb="xs">
+                  Export as Images
+                </Text>
                 <Text size="sm" c="dimmed">
                   Export all cards as PNG images (front and back for each card).
                 </Text>
