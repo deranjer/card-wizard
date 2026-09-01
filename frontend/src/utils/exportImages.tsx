@@ -1,27 +1,34 @@
 import type { Deck } from '../types';
 import { CardRender } from '../components/CardRender';
 
-interface ExportOptions {
-  /** Prefix each filename with the deck name (used for multi-deck exports). */
-  prefixWithDeckName?: boolean;
+export interface RenderedFace {
+  deckName: string;
+  cardId: string;
+  side: 'front' | 'back';
+  dataUrl: string;
+}
+
+interface RenderOptions {
   /** html2canvas output scale. */
   scale?: number;
+  /** Called after each face is captured, for progress UI. */
+  onProgress?: (done: number, total: number) => void;
 }
 
 /**
- * Rasterise every card (front and back) of the given decks to PNG data URLs.
+ * Rasterise every card face (front + back) of the given decks to PNG data URLs.
  *
- * Each card side is mounted off-screen with its own React root, captured with
+ * Each face is mounted off-screen with its own React root, captured with
  * html2canvas-pro, then unmounted. Runs sequentially to keep peak memory
- * bounded. Returns `{ "<name>.png": "data:image/png;base64,..." }`.
- *
- * Previously this loop was copy-pasted in three places (GameView twice,
- * DeckExport once); this is the single implementation.
+ * bounded. This is the single implementation shared by the image export and
+ * the print preview (which previously kept an always-mounted hidden render
+ * tree and rendered one sample card *per style*, so cards sharing a style but
+ * with different data all printed identically).
  */
-export async function exportDecksToImages(
+export async function renderDeckFaces(
   decks: Deck[],
-  { prefixWithDeckName = false, scale = 2 }: ExportOptions = {}
-): Promise<Record<string, string>> {
+  { scale = 2, onProgress }: RenderOptions = {}
+): Promise<RenderedFace[]> {
   const { createRoot } = await import('react-dom/client');
   const html2canvas = (await import('html2canvas-pro')).default;
 
@@ -29,7 +36,9 @@ export async function exportDecksToImages(
   container.style.cssText = 'position:absolute;top:-9999px;left:-9999px;width:fit-content';
   document.body.appendChild(container);
 
-  const images: Record<string, string> = {};
+  const total = decks.reduce((n, d) => n + d.cards.length * 2, 0);
+  const faces: RenderedFace[] = [];
+  let done = 0;
 
   const capture = async (deck: Deck, card: Deck['cards'][number], side: 'front' | 'back') => {
     const host = document.createElement('div');
@@ -51,11 +60,16 @@ export async function exportDecksToImages(
         useCORS: true,
         scale,
       });
-      const prefix = prefixWithDeckName ? `${deck.name}-` : '';
-      images[`${prefix}${card.id}-${side}.png`] = canvas.toDataURL('image/png');
+      faces.push({
+        deckName: deck.name,
+        cardId: card.id,
+        side,
+        dataUrl: canvas.toDataURL('image/png'),
+      });
     } finally {
       root.unmount();
       container.removeChild(host);
+      onProgress?.(++done, total);
     }
   };
 
@@ -70,5 +84,22 @@ export async function exportDecksToImages(
     document.body.removeChild(container);
   }
 
+  return faces;
+}
+
+/**
+ * Convenience wrapper for "save every card as a PNG file": returns a
+ * `{ "<name>.png": dataURL }` map ready for the `SaveImages` binding.
+ */
+export async function exportDecksToImages(
+  decks: Deck[],
+  { prefixWithDeckName = false, scale = 2 }: { prefixWithDeckName?: boolean; scale?: number } = {}
+): Promise<Record<string, string>> {
+  const faces = await renderDeckFaces(decks, { scale });
+  const images: Record<string, string> = {};
+  for (const f of faces) {
+    const prefix = prefixWithDeckName ? `${f.deckName}-` : '';
+    images[`${prefix}${f.cardId}-${f.side}.png`] = f.dataUrl;
+  }
   return images;
 }

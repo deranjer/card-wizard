@@ -16,6 +16,37 @@ func NewGenerator() *GeneratorNew {
 	return &GeneratorNew{}
 }
 
+// cardImageKey is the lookup key for a rendered card face. Keyed per card so
+// two cards that share a style but differ in data get their own image.
+func cardImageKey(cardID, side string) string {
+	return cardID + "-" + side
+}
+
+// registerCardImages decodes and registers every rendered card face with the
+// PDF and returns a map from cardImageKey to the registered image name. Entries
+// that fail to decode are skipped.
+func registerCardImages(pdf *fpdf.Fpdf, rendered []deck.RenderedCard) map[string]string {
+	imageMap := make(map[string]string, len(rendered))
+	for i, rc := range rendered {
+		imageData := rc.Image
+		if idx := strings.Index(imageData, ","); strings.HasPrefix(imageData, "data:") && idx >= 0 {
+			imageData = imageData[idx+1:]
+		}
+		decoded, err := base64.StdEncoding.DecodeString(imageData)
+		if err != nil {
+			continue
+		}
+		name := fmt.Sprintf("card_%s_%s_%d", rc.CardID, rc.Side, i)
+		pdf.RegisterImageOptionsReader(
+			name,
+			fpdf.ImageOptions{ImageType: "PNG", ReadDpi: true},
+			strings.NewReader(string(decoded)),
+		)
+		imageMap[cardImageKey(rc.CardID, rc.Side)] = name
+	}
+	return imageMap
+}
+
 // Generate creates a PDF with precise positioning using gofpdf
 // Pages are interleaved: front1, back1, front2, back2, etc. for duplex printing
 func (g *GeneratorNew) Generate(d deck.Deck, outputPath string) error {
@@ -31,30 +62,9 @@ func (g *GeneratorNew) Generate(d deck.Deck, outputPath string) error {
 	pdf.SetMargins(0, 0, 0) // We handle margins manually
 	pdf.SetAutoPageBreak(false, 0)
 
-	// Register rendered card images
-	imageMap := make(map[string]string) // key: styleId-side, value: image name in PDF
-
-	for i, renderedCard := range d.RenderedCards {
-		// Decode base64 image
-		imageData := strings.TrimPrefix(renderedCard.Image, "data:image/png;base64,")
-
-		decoded, err := base64.StdEncoding.DecodeString(imageData)
-		if err != nil {
-			continue
-		}
-
-		// Register image with fpdf
-		imageName := fmt.Sprintf("card_%s_%s_%d", renderedCard.StyleID, renderedCard.Side, i)
-		imageOpts := fpdf.ImageOptions{
-			ImageType: "PNG",
-			ReadDpi:   true,
-		}
-
-		pdf.RegisterImageOptionsReader(imageName, imageOpts, strings.NewReader(string(decoded)))
-
-		key := fmt.Sprintf("%s-%s", renderedCard.StyleID, renderedCard.Side)
-		imageMap[key] = imageName
-	}
+	// Register every supplied card image; imageMap maps "<cardId>-<side>" to the
+	// name it was registered under.
+	imageMap := registerCardImages(pdf, d.RenderedCards)
 
 	// Expand cards based on Count
 	var expandedCards []deck.Card
@@ -89,14 +99,7 @@ func (g *GeneratorNew) Generate(d deck.Deck, outputPath string) error {
 			x := layout.MarginLeft + float64(col)*(layout.CardWidth+layout.Spacing)
 			y := layout.MarginTop + float64(row)*(layout.CardHeight+layout.Spacing)
 
-			// Get card image
-			styleID := card.FrontStyleID
-			if styleID == "" {
-				styleID = "default-front"
-			}
-
-			key := fmt.Sprintf("%s-front", styleID)
-			if imageName, ok := imageMap[key]; ok {
+			if imageName, ok := imageMap[cardImageKey(card.ID, "front")]; ok {
 				pdf.Image(imageName, x, y, layout.CardWidth, layout.CardHeight, false, "", 0, "")
 			} else {
 				// Fallback: draw a border if image not found
@@ -128,14 +131,7 @@ func (g *GeneratorNew) Generate(d deck.Deck, outputPath string) error {
 
 			card := pageCards[j]
 
-			// Get card image
-			styleID := card.BackStyleID
-			if styleID == "" {
-				styleID = "default-back"
-			}
-
-			key := fmt.Sprintf("%s-back", styleID)
-			if imageName, ok := imageMap[key]; ok {
+			if imageName, ok := imageMap[cardImageKey(card.ID, "back")]; ok {
 				pdf.Image(imageName, x, y, layout.CardWidth, layout.CardHeight, false, "", 0, "")
 			} else {
 				// Fallback: draw a border if image not found
