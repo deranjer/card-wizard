@@ -17,18 +17,10 @@ linters:
     presets:
       - std-error-handling
     rules:
-      # internal/archive is rewritten and hardened in Phase 6 (Walk-error
-      # propagation, Zip-Slip guard, sane perms). Until then, don't block CI on
-      # its known errcheck debt.
-      - path: internal/archive/
-        linters:
-          - errcheck
-      # app.go's Excel export path (ExportXLSX/ExportGameXLSX) is deduplicated in
-      # Phase 4 and its error handling is done in Phase 6. GetPDFLayout's nil
-      # error is part of that same signature cleanup. Baseline until then.
+      # GetPDFLayout keeps an (T, error) return for Wails binding symmetry even
+      # though the error is always nil; unparam would otherwise flag it.
       - path: app.go
         linters:
-          - errcheck
           - unparam
 
 issues:

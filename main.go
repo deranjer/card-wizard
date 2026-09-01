@@ -12,7 +12,7 @@ import (
 )
 
 //go:embed all:frontend/dist
-var assets embed.FS
+var embeddedAssets embed.FS
 
 func main() {
 	// Create an instance of the app structure
@@ -24,7 +24,7 @@ func main() {
 		Width:  1024,
 		Height: 768,
 		AssetServer: &assetserver.Options{
-			Assets: assets,
+			Assets: embeddedAssets,
 			Middleware: func(next http.Handler) http.Handler {
 				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					if strings.HasPrefix(r.URL.Path, "/local-image") {
@@ -32,7 +32,7 @@ func main() {
 						return
 					}
 					if strings.HasPrefix(r.URL.Path, "/local-font") {
-						serveLocalFont(w, r)
+						serveLocalFont(w, r, app)
 						return
 					}
 					next.ServeHTTP(w, r)
@@ -76,12 +76,11 @@ var fontContentType = map[string]string{
 	".woff2": "font/woff2",
 }
 
-// serveLocalFont streams a user-selected font file. Fonts are picked via a
-// native dialog and may legitimately live anywhere on disk, so this is not
-// confined to the working dir; it is limited to real font extensions.
-// TODO(hardening): copy chosen fonts into the working dir on selection so this
-// endpoint can be confined like /local-image.
-func serveLocalFont(w http.ResponseWriter, r *http.Request) {
+// serveLocalFont streams a custom font from the project's fonts/ folder.
+// SelectFontFile copies the chosen file into the working directory, so this
+// endpoint resolves paths through the app (confining them to the working dir)
+// exactly like /local-image, and additionally requires a real font extension.
+func serveLocalFont(w http.ResponseWriter, r *http.Request, app *App) {
 	q := r.URL.Query().Get("path")
 	if q == "" {
 		http.Error(w, "no path", http.StatusBadRequest)
@@ -92,6 +91,11 @@ func serveLocalFont(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not a font", http.StatusBadRequest)
 		return
 	}
+	resolved := app.ResolveImagePath(q)
+	if resolved == "" {
+		http.NotFound(w, r)
+		return
+	}
 	w.Header().Set("Content-Type", ct)
-	http.ServeFile(w, r, filepath.Clean(q))
+	http.ServeFile(w, r, resolved)
 }

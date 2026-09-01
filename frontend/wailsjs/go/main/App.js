@@ -22,8 +22,8 @@ export function ExportXLSX(arg1, arg2) {
   return window['go']['main']['App']['ExportXLSX'](arg1, arg2);
 }
 
-export function GeneratePDF(arg1) {
-  return window['go']['main']['App']['GeneratePDF'](arg1);
+export function GeneratePDF(arg1, arg2) {
+  return window['go']['main']['App']['GeneratePDF'](arg1, arg2);
 }
 
 export function GetExcelHeaders(arg1, arg2) {

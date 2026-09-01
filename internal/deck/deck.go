@@ -79,12 +79,13 @@ type Deck struct {
 	CustomFonts         []CustomFont          `json:"customFonts,omitempty"` // User-supplied font files
 	PaperSize           string                `json:"paperSize"`             // "letter" or "a4"
 	DrawCutGuides       bool                  `json:"drawCutGuides"`         // Draw borders around cards
-	RenderedCards       []RenderedCard        `json:"renderedCards"`         // Pre-rendered card images for PDF
 }
 
 // RenderedCard is one pre-rasterised card face supplied by the frontend for
-// PDF generation. Keyed per card (not per style) so that two cards sharing a
-// style but carrying different field data print differently.
+// PDF generation. It is passed as a separate argument to GeneratePDF rather
+// than stored on the Deck, so these (large, base64) payloads never reach
+// game.json. Keyed per card (not per style) so that two cards sharing a style
+// but carrying different field data print differently.
 type RenderedCard struct {
 	CardID string `json:"cardId"`
 	Side   string `json:"side"`  // "front" or "back"

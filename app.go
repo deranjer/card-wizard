@@ -11,17 +11,19 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"github.com/xuri/excelize/v2"
 
 	"card_wizard/internal/archive"
+	"card_wizard/internal/assets"
 	"card_wizard/internal/deck"
 	"card_wizard/internal/game"
 	"card_wizard/internal/pdf"
+	"card_wizard/internal/project"
+	"card_wizard/internal/xlsx"
 )
 
 // ExcelSelection represents a selected Excel file and its sheets
@@ -33,117 +35,49 @@ type ExcelSelection struct {
 // App struct
 type App struct {
 	ctx context.Context
-
-	// workingDir is the temp directory the current game is edited in. Wails
-	// dispatches every bound call on its own goroutine, so all access goes
-	// through the accessors below under mu.
-	mu         sync.RWMutex
-	workingDir string
+	ws  *project.Workspace
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
-	return &App{}
+	return &App{ws: &project.Workspace{}}
 }
 
 // currentWorkingDir returns the working dir, or "" if none has been created.
-func (a *App) currentWorkingDir() string {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	return a.workingDir
-}
-
-// workDir returns the working dir, creating one on first use.
-func (a *App) workDir() (string, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.workingDir == "" {
-		if err := a.newWorkingDirLocked(); err != nil {
-			return "", err
-		}
-	}
-	return a.workingDir, nil
-}
+func (a *App) currentWorkingDir() string { return a.ws.Dir() }
 
 // resetWorkingDir discards the current temp dir and creates a fresh one.
-func (a *App) resetWorkingDir() error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	old := a.workingDir
-	if err := a.newWorkingDirLocked(); err != nil {
-		return err
-	}
-	if old != "" && old != a.workingDir {
-		if err := os.RemoveAll(old); err != nil {
-			slog.Warn("could not remove previous working dir", "dir", old, "err", err)
-		}
-	}
-	return nil
-}
+func (a *App) resetWorkingDir() error { return a.ws.Reset() }
 
-// setWorkingDir points at an existing directory (legacy .json load, whose
-// images live next to the file). Any temp dir it replaces is cleaned up.
-func (a *App) setWorkingDir(dir string) {
-	a.mu.Lock()
-	old := a.workingDir
-	a.workingDir = dir
-	a.mu.Unlock()
-	if old != "" && old != dir && isCardWizardTemp(old) {
-		if err := os.RemoveAll(old); err != nil {
-			slog.Warn("could not remove previous working dir", "dir", old, "err", err)
-		}
-	}
-}
+// images returns a manager confined to the working dir's images/ folder.
+func (a *App) images() (*assets.Manager, error) { return a.ws.Images() }
 
-// newWorkingDirLocked assumes a.mu is held for writing.
-func (a *App) newWorkingDirLocked() error {
-	dir, err := os.MkdirTemp("", "cardwizard_*")
+// projectImagePath resolves a frontend-supplied asset name to an absolute path
+// inside the working dir's images/ folder.
+func (a *App) projectImagePath(name string) (string, error) {
+	m, err := a.images()
 	if err != nil {
-		return fmt.Errorf("create working dir: %w", err)
+		return "", err
 	}
-	if err := os.MkdirAll(filepath.Join(dir, "images"), 0o755); err != nil {
-		return fmt.Errorf("create images dir: %w", err)
-	}
-	a.workingDir = dir
-	return nil
-}
-
-func isCardWizardTemp(dir string) bool {
-	return filepath.Dir(dir) == filepath.Clean(os.TempDir()) &&
-		strings.HasPrefix(filepath.Base(dir), "cardwizard_")
-}
-
-// sweepStaleWorkingDirs removes leftover cardwizard_* temp dirs from previous
-// runs (best effort). Age-gated so a concurrently running instance is left
-// alone.
-func sweepStaleWorkingDirs(keep string) {
-	entries, err := os.ReadDir(os.TempDir())
-	if err != nil {
-		return
-	}
-	cutoff := time.Now().Add(-24 * time.Hour)
-	for _, e := range entries {
-		if !e.IsDir() || !strings.HasPrefix(e.Name(), "cardwizard_") {
-			continue
-		}
-		full := filepath.Join(os.TempDir(), e.Name())
-		if full == keep {
-			continue
-		}
-		if info, err := e.Info(); err == nil && info.ModTime().Before(cutoff) {
-			_ = os.RemoveAll(full)
-		}
-	}
+	return m.Path(name)
 }
 
 // startup is called when the app starts. The context is saved
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	if err := a.resetWorkingDir(); err != nil {
+	if err := a.ws.Reset(); err != nil {
 		slog.Error("startup: could not create working dir", "err", err)
 	}
-	go sweepStaleWorkingDirs(a.currentWorkingDir())
+	go project.SweepStale(a.currentWorkingDir())
+}
+
+// shutdown is wired to Wails' OnShutdown; it removes the working directory so
+// temp dirs don't accumulate between runs.
+func (a *App) shutdown(context.Context) {
+	if err := a.ws.Cleanup(); err != nil {
+		slog.Warn("shutdown: could not remove working dir", "err", err)
+	}
 }
 
 // SelectExcelFile opens a file dialog and returns the path and list of sheets
@@ -218,8 +152,6 @@ func (a *App) ImportCardsWithMapping(filePath string, sheetName string, mapping 
 
 	var cards []deck.Card
 
-	// Compile regex for slugification inside the function or package level
-	// For simplicity, we'll do it here or use a helper if we had one.
 	slugRegex := regexp.MustCompile(`[^a-z0-9]+`)
 
 	for i, row := range rows {
@@ -261,7 +193,9 @@ func (a *App) ImportCardsWithMapping(filePath string, sheetName string, mapping 
 		countStr := getCell(mapping["count"])
 		count := 1
 		if countStr != "" {
-			fmt.Sscanf(countStr, "%d", &count)
+			if n, err := strconv.Atoi(strings.TrimSpace(countStr)); err == nil {
+				count = n
+			}
 		}
 
 		card := deck.Card{
@@ -312,58 +246,17 @@ func (a *App) ExportXLSX(cards []deck.Card, fields []deck.FieldDefinition) error
 		return nil // User cancelled
 	}
 
-	f := excelize.NewFile()
-	sheetName := "Sheet1"
-	index, err := f.NewSheet(sheetName)
+	f, err := xlsx.BuildWorkbook([]xlsx.Sheet{{Name: "Sheet1", Fields: fields, Cards: cards}})
 	if err != nil {
 		return err
 	}
-	f.SetActiveSheet(index)
+	defer f.Close()
 
-	// Define standard columns
-	stdHeaders := []string{"ID", "Count", "Front Style", "Back Style"}
-
-	// Combine standard headers with custom fields
-	var allHeaders []string
-	allHeaders = append(allHeaders, stdHeaders...)
-	for _, field := range fields {
-		allHeaders = append(allHeaders, field.Name)
-	}
-
-	// Write headers to first row
-	for i, header := range allHeaders {
-		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
-		f.SetCellValue(sheetName, cell, header)
-	}
-
-	// Write Data
-	for i, card := range cards {
-		rowNum := i + 2
-
-		// Write Standard Columns
-		f.SetCellValue(sheetName, fmt.Sprintf("A%d", rowNum), card.ID)
-		f.SetCellValue(sheetName, fmt.Sprintf("B%d", rowNum), card.Count)
-		f.SetCellValue(sheetName, fmt.Sprintf("C%d", rowNum), card.FrontStyleID) // This is ID, ideally we export Name if we had access to Deck, but ID is better for roundtrip if it's "style-1"
-		f.SetCellValue(sheetName, fmt.Sprintf("D%d", rowNum), card.BackStyleID)
-
-		// Write Custom Fields
-		for j, field := range fields {
-			// Offset by len(stdHeaders)
-			colNum := j + 1 + len(stdHeaders)
-			cell, _ := excelize.CoordinatesToCellName(colNum, rowNum)
-			val := card.Data[field.Name]
-			f.SetCellValue(sheetName, cell, val)
-		}
-	}
-
-	if err := f.SaveAs(selection); err != nil {
-		return err
-	}
-
-	return nil
+	return f.SaveAs(selection)
 }
 
-// ExportGameXLSX exports all decks in a game to a single XLSX file with multiple sheets
+// ExportGameXLSX exports all decks in a game to a single XLSX file with one
+// sheet per deck.
 func (a *App) ExportGameXLSX(g game.Game) error {
 	selection, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
 		Title: "Export Game to Excel",
@@ -376,73 +269,18 @@ func (a *App) ExportGameXLSX(g game.Game) error {
 		return err
 	}
 
-	f := excelize.NewFile()
-	defer f.Close()
-
-	// Delete the default Sheet1
-	f.DeleteSheet("Sheet1")
-
-	// Create a sheet for each deck
-	for deckIdx, d := range g.Decks {
-		sheetName := d.Name
-		if sheetName == "" {
-			sheetName = fmt.Sprintf("Deck %d", deckIdx+1)
-		}
-
-		// Ensure unique sheet name (Excel has 31 char limit and no duplicates)
-		if len(sheetName) > 31 {
-			sheetName = sheetName[:31]
-		}
-
-		// Create sheet
-		index, err := f.NewSheet(sheetName)
-		if err != nil {
-			return fmt.Errorf("failed to create sheet %s: %w", sheetName, err)
-		}
-
-		// If this is the first sheet, set it as active
-		if deckIdx == 0 {
-			f.SetActiveSheet(index)
-		}
-
-		// Write headers
-		stdHeaders := []string{"ID", "Count", "Front Style", "Back Style"}
-		var allHeaders []string
-		allHeaders = append(allHeaders, stdHeaders...)
-		for _, field := range d.Fields {
-			allHeaders = append(allHeaders, field.Name)
-		}
-
-		for i, header := range allHeaders {
-			cell, _ := excelize.CoordinatesToCellName(i+1, 1)
-			f.SetCellValue(sheetName, cell, header)
-		}
-
-		// Write card data
-		for i, card := range d.Cards {
-			rowNum := i + 2
-
-			// Write standard columns
-			f.SetCellValue(sheetName, fmt.Sprintf("A%d", rowNum), card.ID)
-			f.SetCellValue(sheetName, fmt.Sprintf("B%d", rowNum), card.Count)
-			f.SetCellValue(sheetName, fmt.Sprintf("C%d", rowNum), card.FrontStyleID)
-			f.SetCellValue(sheetName, fmt.Sprintf("D%d", rowNum), card.BackStyleID)
-
-			// Write custom fields
-			for j, field := range d.Fields {
-				colNum := j + 1 + len(stdHeaders)
-				cell, _ := excelize.CoordinatesToCellName(colNum, rowNum)
-				val := card.Data[field.Name]
-				f.SetCellValue(sheetName, cell, val)
-			}
-		}
+	sheets := make([]xlsx.Sheet, len(g.Decks))
+	for i, d := range g.Decks {
+		sheets[i] = xlsx.Sheet{Name: d.Name, Fields: d.Fields, Cards: d.Cards}
 	}
 
-	if err := f.SaveAs(selection); err != nil {
+	f, err := xlsx.BuildWorkbook(sheets)
+	if err != nil {
 		return err
 	}
+	defer f.Close()
 
-	return nil
+	return f.SaveAs(selection)
 }
 
 func (a *App) SaveGame(g game.Game) error {
@@ -468,7 +306,7 @@ func (a *App) SaveGame(g game.Game) error {
 		ext = ".cwiz"
 	}
 
-	workingDir, err := a.workDir()
+	workingDir, err := a.ws.Ensure()
 	if err != nil {
 		return err
 	}
@@ -516,7 +354,7 @@ func (a *App) LoadGame() (*game.Game, error) {
 
 	ext := strings.ToLower(filepath.Ext(selection))
 	if ext == ".cwiz" {
-		if err := a.resetWorkingDir(); err != nil {
+		if err := a.ws.Reset(); err != nil {
 			return nil, err
 		}
 		workingDir := a.currentWorkingDir()
@@ -538,7 +376,9 @@ func (a *App) LoadGame() (*game.Game, error) {
 	}
 
 	// Legacy JSON loading: just read it, and set working directory to its folder
-	a.setWorkingDir(filepath.Dir(selection))
+	if err := a.ws.Adopt(filepath.Dir(selection)); err != nil {
+		return nil, err
+	}
 	data, err := os.ReadFile(selection)
 	if err != nil {
 		return nil, err
@@ -554,21 +394,13 @@ func (a *App) LoadGame() (*game.Game, error) {
 // NewGame starts a fresh project in a new working directory, discarding the
 // previous one.
 func (a *App) NewGame() error {
-	return a.resetWorkingDir()
+	return a.ws.Reset()
 }
 
-// shutdown is wired to Wails' OnShutdown; it removes the working directory so
-// temp dirs don't accumulate between runs.
-func (a *App) shutdown(context.Context) {
-	if dir := a.currentWorkingDir(); dir != "" {
-		if err := os.RemoveAll(dir); err != nil {
-			slog.Warn("shutdown: could not remove working dir", "dir", dir, "err", err)
-		}
-	}
-}
-
-// GeneratePDF generates a PDF for the deck
-func (a *App) GeneratePDF(d deck.Deck) error {
+// GeneratePDF generates a PDF for the deck. The rasterised card faces are
+// passed alongside the deck rather than embedded in it, so they never end up
+// persisted in game.json.
+func (a *App) GeneratePDF(d deck.Deck, rendered []deck.RenderedCard) error {
 	selection, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
 		Title: "Save PDF",
 		Filters: []runtime.FileFilter{
@@ -584,209 +416,112 @@ func (a *App) GeneratePDF(d deck.Deck) error {
 	}
 
 	gen := pdf.NewGenerator()
-	return gen.Generate(d, selection)
+	return gen.Generate(d, rendered, selection)
 }
 
 // SelectImageFile opens a file dialog to select an image
 func (a *App) SelectImageFile() (string, error) {
-	selection, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
 		Title: "Select Image",
 		Filters: []runtime.FileFilter{
 			{DisplayName: "Images", Pattern: "*.png;*.jpg;*.jpeg;*.gif;*.webp"},
 		},
 	})
-	return selection, err
-}
-
-// AddProjectImage copies an image to the project's "images" working directory
-func (a *App) AddProjectImage(srcPath string) (string, error) {
-	workingDir, err := a.workDir()
-	if err != nil {
-		return "", err
-	}
-	imagesDir := filepath.Join(workingDir, "images")
-
-	// Create images directory if it doesn't exist
-	if err := os.MkdirAll(imagesDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create images directory: %w", err)
-	}
-
-	// Get filename from source path
-	fileName := filepath.Base(srcPath)
-	destPath := filepath.Join(imagesDir, fileName)
-
-	// Check if file already exists
-	// If it does, we generate a unique name to avoid overwriting accidentally on "Add"
-	// For "Replace", we will have a specific method
-	ext := filepath.Ext(fileName)
-	name := strings.TrimSuffix(fileName, ext)
-	counter := 1
-	for {
-		if _, err := os.Stat(destPath); os.IsNotExist(err) {
-			break
-		}
-		// File exists, try next counter
-		fileName = fmt.Sprintf("%s_%d%s", name, counter, ext)
-		destPath = filepath.Join(imagesDir, fileName)
-		counter++
-	}
-
-	input, err := os.ReadFile(srcPath)
-	if err != nil {
-		return "", err
-	}
-
-	if err := os.WriteFile(destPath, input, 0644); err != nil {
-		return "", err
-	}
-
-	// Return relative path using forward slashes
-	return filepath.ToSlash(filepath.Join("images", fileName)), nil
 }
 
 // SelectImageFiles opens a file dialog to select multiple images
 func (a *App) SelectImageFiles() ([]string, error) {
-	selection, err := runtime.OpenMultipleFilesDialog(a.ctx, runtime.OpenDialogOptions{
+	return runtime.OpenMultipleFilesDialog(a.ctx, runtime.OpenDialogOptions{
 		Title: "Select Images",
 		Filters: []runtime.FileFilter{
 			{DisplayName: "Images", Pattern: "*.png;*.jpg;*.jpeg;*.gif;*.webp"},
 		},
 	})
-	return selection, err
 }
 
-// AddProjectImages adds multiple images to the project
+// AddProjectImage copies an image into the project's images/ working directory
+// and returns its project-relative reference.
+func (a *App) AddProjectImage(srcPath string) (string, error) {
+	m, err := a.images()
+	if err != nil {
+		return "", err
+	}
+	return m.Add(srcPath)
+}
+
+// AddProjectImages adds multiple images to the project.
 func (a *App) AddProjectImages(srcPaths []string) ([]string, error) {
-	var addedPaths []string
-	var errs []string
-
-	for _, srcPath := range srcPaths {
-		path, err := a.AddProjectImage(srcPath)
-		if err != nil {
-			errs = append(errs, fmt.Sprintf("%s: %v", filepath.Base(srcPath), err))
-		} else {
-			addedPaths = append(addedPaths, path)
-		}
-	}
-
-	if len(errs) > 0 {
-		return addedPaths, fmt.Errorf("some images failed to import: %s", strings.Join(errs, "; "))
-	}
-
-	return addedPaths, nil
-}
-
-// ListProjectImages returns a list of filenames in the project's "images" directory
-func (a *App) ListProjectImages() ([]string, error) {
-	workingDir := a.currentWorkingDir()
-	if workingDir == "" {
-		return nil, nil
-	}
-
-	imagesDir := filepath.Join(workingDir, "images")
-	if err := os.MkdirAll(imagesDir, 0o755); err != nil {
-		return nil, nil
-	}
-
-	files, err := os.ReadDir(imagesDir)
+	m, err := a.images()
 	if err != nil {
 		return nil, err
 	}
-
-	var images []string
-	for _, file := range files {
-		if !file.IsDir() {
-			// Filter for image extensions if needed, but for now assuming mostly images
-			ext := strings.ToLower(filepath.Ext(file.Name()))
-			if ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".webp" {
-				images = append(images, file.Name())
-			}
-		}
-	}
-
-	return images, nil
+	return m.AddMany(srcPaths)
 }
 
-// projectImagePath resolves a frontend-supplied asset name to an absolute path
-// inside the working dir's images/ folder. Only the base name is honoured, so
-// "../.." style names cannot escape the folder.
-func (a *App) projectImagePath(name string) (string, error) {
-	workingDir := a.currentWorkingDir()
-	if workingDir == "" {
-		return "", fmt.Errorf("no working directory")
+// ListProjectImages returns the filenames in the project's images/ directory.
+func (a *App) ListProjectImages() ([]string, error) {
+	if a.currentWorkingDir() == "" {
+		return nil, nil
 	}
-	base := filepath.Base(filepath.FromSlash(name))
-	if base == "." || base == ".." || base == string(filepath.Separator) || base == "" {
-		return "", fmt.Errorf("invalid asset name %q", name)
+	m, err := a.images()
+	if err != nil {
+		return nil, err
 	}
-	return filepath.Join(workingDir, "images", base), nil
+	return m.List()
 }
 
-// DeleteProjectImage deletes an image from the project's "images" directory
+// DeleteProjectImage deletes an image from the project's images/ directory.
 func (a *App) DeleteProjectImage(filename string) error {
-	imagePath, err := a.projectImagePath(filename)
+	if a.currentWorkingDir() == "" {
+		return nil
+	}
+	m, err := a.images()
 	if err != nil {
 		return err
 	}
-	return os.Remove(imagePath)
+	return m.Delete(filename)
 }
 
-// ReplaceProjectImage overwrites a project image with a new file
+// ReplaceProjectImage overwrites a project image with a new file.
 func (a *App) ReplaceProjectImage(targetFilename string, srcPath string) error {
-	destPath, err := a.projectImagePath(targetFilename)
+	m, err := a.images()
 	if err != nil {
 		return err
 	}
-	input, err := os.ReadFile(srcPath)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(destPath, input, 0o644)
+	return m.Replace(targetFilename, srcPath)
 }
 
-// OpenAssetFolder opens the temporary working directory's "images" folder in the OS file explorer
+// OpenAssetFolder opens the working directory's images/ folder in the OS file
+// explorer.
 func (a *App) OpenAssetFolder() error {
-	workingDir, err := a.workDir()
+	m, err := a.images()
 	if err != nil {
 		return err
 	}
-	imagesDir := filepath.Join(workingDir, "images")
+	imagesDir := m.Dir()
 	if err := os.MkdirAll(imagesDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create images directory: %w", err)
 	}
 
-	// Open the folder
-	// We use standard runtime environment to open folder natively
-	// (Wails has runtime.Environment() but it's easier to just use exec for OS specific)
-	// For windows: `explorer`
-	// For macOS: `open`
-	// For linux: `xdg-open`
-
-	// We can cheat by using wails BrowserOpenURL but on a file:// scheme,
-	// or standard library exec. We'll use exec to be safe since it's desktop.
-
 	var cmd string
 	var args []string
-
 	switch runtime.Environment(a.ctx).Platform {
 	case "windows":
-		cmd = "explorer"
-		args = []string{imagesDir}
+		cmd, args = "explorer", []string{imagesDir}
 	case "darwin":
-		cmd = "open"
-		args = []string{imagesDir}
+		cmd, args = "open", []string{imagesDir}
 	case "linux":
-		cmd = "xdg-open"
-		args = []string{imagesDir}
+		cmd, args = "xdg-open", []string{imagesDir}
 	default:
 		return fmt.Errorf("unsupported platform")
 	}
 
-	c := exec.Command(cmd, args...)
-	return c.Start()
+	return exec.Command(cmd, args...).Start()
 }
 
-// SelectFontFile opens a file dialog to select a font
+// SelectFontFile opens a file dialog to select a font, copies it into the
+// working dir's fonts/ folder, and returns its project-relative reference so
+// the /local-font endpoint can stay confined to the working directory.
 func (a *App) SelectFontFile() (string, error) {
 	selection, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
 		Title: "Select Font",
@@ -794,7 +529,18 @@ func (a *App) SelectFontFile() (string, error) {
 			{DisplayName: "Fonts", Pattern: "*.ttf;*.otf;*.woff;*.woff2"},
 		},
 	})
-	return selection, err
+	if err != nil {
+		return "", err
+	}
+	if selection == "" {
+		return "", nil // User cancelled
+	}
+
+	m, err := a.ws.Fonts()
+	if err != nil {
+		return "", err
+	}
+	return m.Add(selection)
 }
 
 // LoadImageAsDataURL reads a local image file and returns it as a base64 data
@@ -802,6 +548,9 @@ func (a *App) SelectFontFile() (string, error) {
 // sniffing), rather than always claiming image/png.
 func (a *App) LoadImageAsDataURL(path string) (string, error) {
 	resolvedPath := a.ResolveImagePath(path)
+	if resolvedPath == "" {
+		return "", fmt.Errorf("image not found")
+	}
 
 	data, err := os.ReadFile(resolvedPath)
 	if err != nil {
@@ -883,22 +632,7 @@ func (a *App) SaveImages(images map[string]string) error {
 // there is no working dir, or the path would escape it — callers must treat ""
 // as "not found" rather than serving an arbitrary file.
 func (a *App) ResolveImagePath(path string) string {
-	workingDir := a.currentWorkingDir()
-	if path == "" || workingDir == "" {
-		return ""
-	}
-	root := filepath.Clean(workingDir)
-
-	var abs string
-	if filepath.IsAbs(path) {
-		abs = filepath.Clean(path)
-	} else {
-		abs = filepath.Clean(filepath.Join(root, filepath.FromSlash(path)))
-	}
-	if abs != root && !strings.HasPrefix(abs, root+string(filepath.Separator)) {
-		return ""
-	}
-	return abs
+	return a.ws.Resolve(path)
 }
 
 // convertPathsToRelative rewrites absolute paths stored in a deck's image

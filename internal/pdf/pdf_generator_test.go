@@ -35,7 +35,7 @@ func TestGenerateProducesPDF(t *testing.T) {
 	}
 
 	out := filepath.Join(t.TempDir(), "smoke.pdf")
-	if err := NewGenerator().Generate(d, out); err != nil {
+	if err := NewGenerator().Generate(d, nil, out); err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
 
@@ -87,13 +87,13 @@ func TestGeneratePlacesDistinctImagesForSameStyleCards(t *testing.T) {
 			{ID: "a", Count: 1, FrontStyleID: "s", BackStyleID: "s"},
 			{ID: "b", Count: 1, FrontStyleID: "s", BackStyleID: "s"},
 		},
-		RenderedCards: []deck.RenderedCard{
-			{CardID: "a", Side: "front", Image: base64.StdEncoding.EncodeToString(pngBlack)},
-			{CardID: "b", Side: "front", Image: base64.StdEncoding.EncodeToString(pngWhite)},
-		},
+	}
+	rendered := []deck.RenderedCard{
+		{CardID: "a", Side: "front", Image: base64.StdEncoding.EncodeToString(pngBlack)},
+		{CardID: "b", Side: "front", Image: base64.StdEncoding.EncodeToString(pngWhite)},
 	}
 	out := filepath.Join(t.TempDir(), "weapons.pdf")
-	if err := NewGenerator().Generate(d, out); err != nil {
+	if err := NewGenerator().Generate(d, rendered, out); err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
 	data, _ := os.ReadFile(out)

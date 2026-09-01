@@ -56,9 +56,9 @@ export interface CustomFont {
 }
 
 export interface RenderedCard {
-  styleId: string;
+  cardId: string;
   side: 'front' | 'back';
-  image: string; // base64 encoded PNG
+  image: string; // data URL or bare base64 PNG
 }
 
 export interface Deck {
@@ -75,7 +75,6 @@ export interface Deck {
   customFonts: CustomFont[];
   paperSize: 'letter' | 'a4';
   drawCutGuides?: boolean;
-  renderedCards?: RenderedCard[]; // Optional for PDF generation
 }
 
 export interface PDFLayout {

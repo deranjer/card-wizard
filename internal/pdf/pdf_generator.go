@@ -47,9 +47,11 @@ func registerCardImages(pdf *fpdf.Fpdf, rendered []deck.RenderedCard) map[string
 	return imageMap
 }
 
-// Generate creates a PDF with precise positioning using gofpdf
-// Pages are interleaved: front1, back1, front2, back2, etc. for duplex printing
-func (g *GeneratorNew) Generate(d deck.Deck, outputPath string) error {
+// Generate creates a PDF with precise positioning using gofpdf. The rasterised
+// card faces are supplied by the caller (not carried on the deck) so they are
+// never persisted. Pages are interleaved: front1, back1, front2, back2, etc.
+// for duplex printing.
+func (g *GeneratorNew) Generate(d deck.Deck, rendered []deck.RenderedCard, outputPath string) error {
 	// Calculate layout
 	layout := CalculateLayout(d)
 
@@ -64,7 +66,7 @@ func (g *GeneratorNew) Generate(d deck.Deck, outputPath string) error {
 
 	// Register every supplied card image; imageMap maps "<cardId>-<side>" to the
 	// name it was registered under.
-	imageMap := registerCardImages(pdf, d.RenderedCards)
+	imageMap := registerCardImages(pdf, rendered)
 
 	// Expand cards based on Count
 	var expandedCards []deck.Card
