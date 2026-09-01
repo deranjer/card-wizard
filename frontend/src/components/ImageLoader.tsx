@@ -53,11 +53,36 @@ export function ImageLoader({ path, style, alt }: ImageLoaderProps) {
   }, [path]);
 
   if (loading) {
-    return <div style={{ ...style, backgroundColor: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading...</div>;
+    return (
+      <div
+        style={{
+          ...style,
+          backgroundColor: '#f0f0f0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        Loading...
+      </div>
+    );
   }
 
   if (error || !src) {
-    return <div style={{ ...style, backgroundColor: '#fee', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px' }}>Error</div>;
+    return (
+      <div
+        style={{
+          ...style,
+          backgroundColor: '#fee',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '10px',
+        }}
+      >
+        Error
+      </div>
+    );
   }
 
   return <img src={src} style={style} alt={alt || ''} />;

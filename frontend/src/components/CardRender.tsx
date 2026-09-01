@@ -12,24 +12,32 @@ interface CardRenderProps {
 
 const MM_TO_PX = 3.7795275591;
 
-export function CardRender({ card, deck, mode, scale = 1, border = true, className }: CardRenderProps) {
+export function CardRender({
+  card,
+  deck,
+  mode,
+  scale = 1,
+  border = true,
+  className,
+}: CardRenderProps) {
   const styles = mode === 'front' ? deck.frontStyles : deck.backStyles;
   // Determine effective style ID
   let effectiveStyleId = mode === 'front' ? card.frontStyleId : card.backStyleId;
 
   // Fallback to default if ID is missing
   if (!effectiveStyleId || !styles[effectiveStyleId]) {
-    const defaultId = mode === 'front'
-        ? (deck.defaultFrontStyleId || 'default-front')
-        : (deck.defaultBackStyleId || 'default-back');
+    const defaultId =
+      mode === 'front'
+        ? deck.defaultFrontStyleId || 'default-front'
+        : deck.defaultBackStyleId || 'default-back';
     if (styles[defaultId]) {
-        effectiveStyleId = defaultId;
+      effectiveStyleId = defaultId;
     } else {
-        // Fallback to first available style
-        const allIds = Object.keys(styles);
-        if (allIds.length > 0) {
-            effectiveStyleId = allIds[0];
-        }
+      // Fallback to first available style
+      const allIds = Object.keys(styles);
+      if (allIds.length > 0) {
+        effectiveStyleId = allIds[0];
+      }
     }
   }
 
@@ -63,8 +71,18 @@ export function CardRender({ card, deck, mode, scale = 1, border = true, classNa
             fontStyle: el.fontStyle || 'normal',
             textDecoration: el.textDecoration || 'none',
             display: 'flex',
-            alignItems: el.verticalAlign === 'top' ? 'flex-start' : el.verticalAlign === 'bottom' ? 'flex-end' : 'center',
-            justifyContent: el.textAlign === 'left' ? 'flex-start' : el.textAlign === 'right' ? 'flex-end' : 'center',
+            alignItems:
+              el.verticalAlign === 'top'
+                ? 'flex-start'
+                : el.verticalAlign === 'bottom'
+                  ? 'flex-end'
+                  : 'center',
+            justifyContent:
+              el.textAlign === 'left'
+                ? 'flex-start'
+                : el.textAlign === 'right'
+                  ? 'flex-end'
+                  : 'center',
             textAlign: el.textAlign || 'center',
             whiteSpace: 'pre-wrap',
             overflow: 'hidden',
@@ -92,22 +110,24 @@ export function CardRender({ card, deck, mode, scale = 1, border = true, classNa
             ) : null
           ) : el.type === 'shape' && el.points ? (
             <svg
-                width="100%"
-                height="100%"
-                viewBox="0 0 100 100"
-                preserveAspectRatio="none"
-                style={{ overflow: 'visible' }}
+              width="100%"
+              height="100%"
+              viewBox="0 0 100 100"
+              preserveAspectRatio="none"
+              style={{ overflow: 'visible' }}
             >
-                <polygon
-                    points={el.points.map(p => `${p.x * 100},${p.y * 100}`).join(' ')}
-                    fill={el.fillColor || '#cccccc'}
-                    stroke={el.strokeColor || 'none'}
-                    strokeWidth={el.strokeWidth || 0}
-                    vectorEffect="non-scaling-stroke"
-                />
+              <polygon
+                points={el.points.map((p) => `${p.x * 100},${p.y * 100}`).join(' ')}
+                fill={el.fillColor || '#cccccc'}
+                stroke={el.strokeColor || 'none'}
+                strokeWidth={el.strokeWidth || 0}
+                vectorEffect="non-scaling-stroke"
+              />
             </svg>
+          ) : el.field ? (
+            card.data[el.field]
           ) : (
-            el.field ? card.data[el.field] : el.staticText
+            el.staticText
           )}
         </div>
       ))}

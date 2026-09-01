@@ -5,11 +5,7 @@ import { describe, it, expect } from 'vitest';
 
 // Wrap component with MantineProvider
 const renderWithMantine = (component: React.ReactNode) => {
-  return render(
-    <MantineProvider>
-      {component}
-    </MantineProvider>
-  );
+  return render(<MantineProvider>{component}</MantineProvider>);
 };
 
 describe('Help Component', () => {

@@ -7,7 +7,7 @@ import (
 
 	"card_wizard/internal/deck"
 
-	"github.com/jung-kurt/gofpdf"
+	"github.com/go-pdf/fpdf"
 )
 
 type GeneratorNew struct{}
@@ -27,7 +27,7 @@ func (g *GeneratorNew) Generate(d deck.Deck, outputPath string) error {
 		pageType = "A4"
 	}
 
-	pdf := gofpdf.New("P", "mm", pageType, "")
+	pdf := fpdf.New("P", "mm", pageType, "")
 	pdf.SetMargins(0, 0, 0) // We handle margins manually
 	pdf.SetAutoPageBreak(false, 0)
 
@@ -36,19 +36,16 @@ func (g *GeneratorNew) Generate(d deck.Deck, outputPath string) error {
 
 	for i, renderedCard := range d.RenderedCards {
 		// Decode base64 image
-		imageData := renderedCard.Image
-		if strings.HasPrefix(imageData, "data:image/png;base64,") {
-			imageData = strings.TrimPrefix(imageData, "data:image/png;base64,")
-		}
+		imageData := strings.TrimPrefix(renderedCard.Image, "data:image/png;base64,")
 
 		decoded, err := base64.StdEncoding.DecodeString(imageData)
 		if err != nil {
 			continue
 		}
 
-		// Register image with gofpdf
+		// Register image with fpdf
 		imageName := fmt.Sprintf("card_%s_%s_%d", renderedCard.StyleID, renderedCard.Side, i)
-		imageOpts := gofpdf.ImageOptions{
+		imageOpts := fpdf.ImageOptions{
 			ImageType: "PNG",
 			ReadDpi:   true,
 		}
