@@ -5,12 +5,15 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"github.com/xuri/excelize/v2"
@@ -29,8 +32,13 @@ type ExcelSelection struct {
 
 // App struct
 type App struct {
-	ctx        context.Context
-	workingDir string // Path to the temporary working directory where the game is being edited
+	ctx context.Context
+
+	// workingDir is the temp directory the current game is edited in. Wails
+	// dispatches every bound call on its own goroutine, so all access goes
+	// through the accessors below under mu.
+	mu         sync.RWMutex
+	workingDir string
 }
 
 // NewApp creates a new App application struct
@@ -38,11 +46,104 @@ func NewApp() *App {
 	return &App{}
 }
 
+// currentWorkingDir returns the working dir, or "" if none has been created.
+func (a *App) currentWorkingDir() string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.workingDir
+}
+
+// workDir returns the working dir, creating one on first use.
+func (a *App) workDir() (string, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.workingDir == "" {
+		if err := a.newWorkingDirLocked(); err != nil {
+			return "", err
+		}
+	}
+	return a.workingDir, nil
+}
+
+// resetWorkingDir discards the current temp dir and creates a fresh one.
+func (a *App) resetWorkingDir() error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	old := a.workingDir
+	if err := a.newWorkingDirLocked(); err != nil {
+		return err
+	}
+	if old != "" && old != a.workingDir {
+		if err := os.RemoveAll(old); err != nil {
+			slog.Warn("could not remove previous working dir", "dir", old, "err", err)
+		}
+	}
+	return nil
+}
+
+// setWorkingDir points at an existing directory (legacy .json load, whose
+// images live next to the file). Any temp dir it replaces is cleaned up.
+func (a *App) setWorkingDir(dir string) {
+	a.mu.Lock()
+	old := a.workingDir
+	a.workingDir = dir
+	a.mu.Unlock()
+	if old != "" && old != dir && isCardWizardTemp(old) {
+		if err := os.RemoveAll(old); err != nil {
+			slog.Warn("could not remove previous working dir", "dir", old, "err", err)
+		}
+	}
+}
+
+// newWorkingDirLocked assumes a.mu is held for writing.
+func (a *App) newWorkingDirLocked() error {
+	dir, err := os.MkdirTemp("", "cardwizard_*")
+	if err != nil {
+		return fmt.Errorf("create working dir: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "images"), 0o755); err != nil {
+		return fmt.Errorf("create images dir: %w", err)
+	}
+	a.workingDir = dir
+	return nil
+}
+
+func isCardWizardTemp(dir string) bool {
+	return filepath.Dir(dir) == filepath.Clean(os.TempDir()) &&
+		strings.HasPrefix(filepath.Base(dir), "cardwizard_")
+}
+
+// sweepStaleWorkingDirs removes leftover cardwizard_* temp dirs from previous
+// runs (best effort). Age-gated so a concurrently running instance is left
+// alone.
+func sweepStaleWorkingDirs(keep string) {
+	entries, err := os.ReadDir(os.TempDir())
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().Add(-24 * time.Hour)
+	for _, e := range entries {
+		if !e.IsDir() || !strings.HasPrefix(e.Name(), "cardwizard_") {
+			continue
+		}
+		full := filepath.Join(os.TempDir(), e.Name())
+		if full == keep {
+			continue
+		}
+		if info, err := e.Info(); err == nil && info.ModTime().Before(cutoff) {
+			_ = os.RemoveAll(full)
+		}
+	}
+}
+
 // startup is called when the app starts. The context is saved
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	a.NewGame() // Initialize a working directory on startup
+	if err := a.resetWorkingDir(); err != nil {
+		slog.Error("startup: could not create working dir", "err", err)
+	}
+	go sweepStaleWorkingDirs(a.currentWorkingDir())
 }
 
 // SelectExcelFile opens a file dialog and returns the path and list of sheets
@@ -367,9 +468,14 @@ func (a *App) SaveGame(g game.Game) error {
 		ext = ".cwiz"
 	}
 
+	workingDir, err := a.workDir()
+	if err != nil {
+		return err
+	}
+
 	// Convert paths to relative based on working dir
 	for i := range g.Decks {
-		g.Decks[i] = a.convertPathsToRelative(g.Decks[i], a.workingDir)
+		g.Decks[i] = a.convertPathsToRelative(g.Decks[i], workingDir)
 	}
 
 	g.Stamp() // record the schema version we're writing
@@ -379,18 +485,18 @@ func (a *App) SaveGame(g game.Game) error {
 	if err != nil {
 		return err
 	}
-	gameJsonPath := filepath.Join(a.workingDir, "game.json")
-	if err := os.WriteFile(gameJsonPath, data, 0644); err != nil {
+	gameJsonPath := filepath.Join(workingDir, "game.json")
+	if err := os.WriteFile(gameJsonPath, data, 0o644); err != nil {
 		return fmt.Errorf("failed to write game.json to working dir: %w", err)
 	}
 
 	// If saving as cwiz, zip the working directory
 	if ext == ".cwiz" {
-		return archive.ZipDir(a.workingDir, selection)
+		return archive.ZipDir(workingDir, selection)
 	}
 
 	// Legacy JSON saving logic
-	return os.WriteFile(selection, data, 0644)
+	return os.WriteFile(selection, data, 0o644)
 }
 
 // LoadGame loads a game from a file
@@ -410,16 +516,16 @@ func (a *App) LoadGame() (*game.Game, error) {
 
 	ext := strings.ToLower(filepath.Ext(selection))
 	if ext == ".cwiz" {
-		// Create a new fresh working directory
-		a.NewGame() // Sets up a new a.workingDir
+		if err := a.resetWorkingDir(); err != nil {
+			return nil, err
+		}
+		workingDir := a.currentWorkingDir()
 
-		// Unzip the file
-		if err := archive.Unzip(selection, a.workingDir); err != nil {
+		if err := archive.Unzip(selection, workingDir); err != nil {
 			return nil, fmt.Errorf("failed to extract .cwiz file: %w", err)
 		}
 
-		// Read the extracted game.json
-		data, err := os.ReadFile(filepath.Join(a.workingDir, "game.json"))
+		data, err := os.ReadFile(filepath.Join(workingDir, "game.json"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to read game.json from archive: %w", err)
 		}
@@ -432,7 +538,7 @@ func (a *App) LoadGame() (*game.Game, error) {
 	}
 
 	// Legacy JSON loading: just read it, and set working directory to its folder
-	a.workingDir = filepath.Dir(selection)
+	a.setWorkingDir(filepath.Dir(selection))
 	data, err := os.ReadFile(selection)
 	if err != nil {
 		return nil, err
@@ -445,20 +551,19 @@ func (a *App) LoadGame() (*game.Game, error) {
 	return &g, nil
 }
 
-// NewGame resets the current game path and creates a new temporary working directory
-func (a *App) NewGame() {
-	// Create a new temp directory
-	tempDir, err := os.MkdirTemp("", "cardwizard_*")
-	if err != nil {
-		fmt.Printf("Failed to create temp directory: %v\n", err)
-		return
-	}
+// NewGame starts a fresh project in a new working directory, discarding the
+// previous one.
+func (a *App) NewGame() error {
+	return a.resetWorkingDir()
+}
 
-	a.workingDir = tempDir
-
-	// Pre-create images directory
-	if err := os.MkdirAll(filepath.Join(a.workingDir, "images"), 0755); err != nil {
-		fmt.Printf("Failed to create images directory: %v\n", err)
+// shutdown is wired to Wails' OnShutdown; it removes the working directory so
+// temp dirs don't accumulate between runs.
+func (a *App) shutdown(context.Context) {
+	if dir := a.currentWorkingDir(); dir != "" {
+		if err := os.RemoveAll(dir); err != nil {
+			slog.Warn("shutdown: could not remove working dir", "dir", dir, "err", err)
+		}
 	}
 }
 
@@ -495,12 +600,11 @@ func (a *App) SelectImageFile() (string, error) {
 
 // AddProjectImage copies an image to the project's "images" working directory
 func (a *App) AddProjectImage(srcPath string) (string, error) {
-	if a.workingDir == "" {
-		// Fallback if not initialized
-		a.NewGame()
+	workingDir, err := a.workDir()
+	if err != nil {
+		return "", err
 	}
-
-	imagesDir := filepath.Join(a.workingDir, "images")
+	imagesDir := filepath.Join(workingDir, "images")
 
 	// Create images directory if it doesn't exist
 	if err := os.MkdirAll(imagesDir, 0755); err != nil {
@@ -574,15 +678,14 @@ func (a *App) AddProjectImages(srcPaths []string) ([]string, error) {
 
 // ListProjectImages returns a list of filenames in the project's "images" directory
 func (a *App) ListProjectImages() ([]string, error) {
-	if a.workingDir == "" {
+	workingDir := a.currentWorkingDir()
+	if workingDir == "" {
 		return nil, nil
 	}
 
-	imagesDir := filepath.Join(a.workingDir, "images")
-
-	// Create images directory if it doesn't exist (just in case)
-	if err := os.MkdirAll(imagesDir, 0755); err != nil {
-		return nil, nil // Return empty if we can't create it, or error? Let's return empty.
+	imagesDir := filepath.Join(workingDir, "images")
+	if err := os.MkdirAll(imagesDir, 0o755); err != nil {
+		return nil, nil
 	}
 
 	files, err := os.ReadDir(imagesDir)
@@ -604,43 +707,51 @@ func (a *App) ListProjectImages() ([]string, error) {
 	return images, nil
 }
 
+// projectImagePath resolves a frontend-supplied asset name to an absolute path
+// inside the working dir's images/ folder. Only the base name is honoured, so
+// "../.." style names cannot escape the folder.
+func (a *App) projectImagePath(name string) (string, error) {
+	workingDir := a.currentWorkingDir()
+	if workingDir == "" {
+		return "", fmt.Errorf("no working directory")
+	}
+	base := filepath.Base(filepath.FromSlash(name))
+	if base == "." || base == ".." || base == string(filepath.Separator) || base == "" {
+		return "", fmt.Errorf("invalid asset name %q", name)
+	}
+	return filepath.Join(workingDir, "images", base), nil
+}
+
 // DeleteProjectImage deletes an image from the project's "images" directory
 func (a *App) DeleteProjectImage(filename string) error {
-	if a.workingDir == "" {
-		return fmt.Errorf("no working directory")
+	imagePath, err := a.projectImagePath(filename)
+	if err != nil {
+		return err
 	}
-
-	imagePath := filepath.Join(a.workingDir, "images", filename)
-
 	return os.Remove(imagePath)
 }
 
 // ReplaceProjectImage overwrites a project image with a new file
 func (a *App) ReplaceProjectImage(targetFilename string, srcPath string) error {
-	if a.workingDir == "" {
-		return fmt.Errorf("no working directory")
+	destPath, err := a.projectImagePath(targetFilename)
+	if err != nil {
+		return err
 	}
-
-	destPath := filepath.Join(a.workingDir, "images", targetFilename)
-
 	input, err := os.ReadFile(srcPath)
 	if err != nil {
 		return err
 	}
-
-	return os.WriteFile(destPath, input, 0644)
+	return os.WriteFile(destPath, input, 0o644)
 }
 
 // OpenAssetFolder opens the temporary working directory's "images" folder in the OS file explorer
 func (a *App) OpenAssetFolder() error {
-	if a.workingDir == "" {
-		a.NewGame() // fallback
+	workingDir, err := a.workDir()
+	if err != nil {
+		return err
 	}
-
-	imagesDir := filepath.Join(a.workingDir, "images")
-
-	// Create it if it doesn't exist
-	if err := os.MkdirAll(imagesDir, 0755); err != nil {
+	imagesDir := filepath.Join(workingDir, "images")
+	if err := os.MkdirAll(imagesDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create images directory: %w", err)
 	}
 
@@ -753,29 +864,41 @@ func (a *App) SaveImages(images map[string]string) error {
 			return fmt.Errorf("failed to decode image %s: %w", filename, err)
 		}
 
-		path := filepath.Join(selection, filename)
-		if err := os.WriteFile(path, dec, 0644); err != nil {
-			return fmt.Errorf("failed to save image %s: %w", filename, err)
+		// filename comes from card ids, which the user can edit — keep only the
+		// base name so it cannot write outside the chosen folder.
+		base := filepath.Base(filepath.FromSlash(filename))
+		if base == "." || base == ".." || base == "" {
+			return fmt.Errorf("invalid image name %q", filename)
+		}
+		if err := os.WriteFile(filepath.Join(selection, base), dec, 0o644); err != nil {
+			return fmt.Errorf("failed to save image %s: %w", base, err)
 		}
 	}
 
 	return nil
 }
 
-// ResolveImagePath resolves a potentially relative image path to an absolute path
+// ResolveImagePath turns a stored image reference into an absolute path,
+// constrained to the working directory. It returns "" if the path is missing,
+// there is no working dir, or the path would escape it — callers must treat ""
+// as "not found" rather than serving an arbitrary file.
 func (a *App) ResolveImagePath(path string) string {
-	// If already absolute, return as-is
+	workingDir := a.currentWorkingDir()
+	if path == "" || workingDir == "" {
+		return ""
+	}
+	root := filepath.Clean(workingDir)
+
+	var abs string
 	if filepath.IsAbs(path) {
-		return path
+		abs = filepath.Clean(path)
+	} else {
+		abs = filepath.Clean(filepath.Join(root, filepath.FromSlash(path)))
 	}
-
-	// If no working dir, return path as-is
-	if a.workingDir == "" {
-		return path
+	if abs != root && !strings.HasPrefix(abs, root+string(filepath.Separator)) {
+		return ""
 	}
-
-	// Resolve relative to working directory
-	return filepath.Join(a.workingDir, path)
+	return abs
 }
 
 // convertPathsToRelative rewrites absolute paths stored in a deck's image
