@@ -90,31 +90,41 @@ export interface PDFLayout {
   marginTop: number;
 }
 
-export const DEFAULT_LAYOUT: CardLayout = {
-  name: 'Default Style',
-  elements: [],
-};
-
 export interface Game {
   name: string;
   decks: Deck[];
 }
 
-export const DEFAULT_DECK: Deck = {
-  id: 'deck-1',
-  name: 'New Deck',
-  width: 63.5, // Standard Poker size in mm
-  height: 88.9,
-  cards: [],
-  fields: [],
-  frontStyles: {
-    'default-front': { name: 'Default Front', elements: [] },
-  },
-  backStyles: {
-    'default-back': { name: 'Default Back', elements: [] },
-  },
-  defaultFrontStyleId: 'default-front',
-  defaultBackStyleId: 'default-back',
-  customFonts: [],
-  paperSize: 'letter',
-};
+let deckSeq = 0;
+
+/**
+ * Build a fresh default deck. Every call returns brand-new nested objects
+ * (styles, cards, fields) so decks created from the default never share
+ * mutable state — the previous `DEFAULT_DECK` constant did, which let an edit
+ * to one deck leak into another.
+ */
+export function makeDefaultDeck(overrides: Partial<Deck> = {}): Deck {
+  return {
+    id: `deck-${Date.now().toString(36)}-${deckSeq++}`,
+    name: 'New Deck',
+    width: 63.5, // Standard Poker size in mm
+    height: 88.9,
+    cards: [],
+    fields: [],
+    frontStyles: {
+      'default-front': { name: 'Default Front', elements: [] },
+    },
+    backStyles: {
+      'default-back': { name: 'Default Back', elements: [] },
+    },
+    defaultFrontStyleId: 'default-front',
+    defaultBackStyleId: 'default-back',
+    customFonts: [],
+    paperSize: 'letter',
+    ...overrides,
+  };
+}
+
+export function makeDefaultGame(): Game {
+  return { name: 'New Game', decks: [makeDefaultDeck()] };
+}
