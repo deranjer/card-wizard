@@ -44,10 +44,13 @@ func (m *Manager) allowed(name string) bool {
 }
 
 // base reduces a caller-supplied name to a safe file name inside the managed
-// directory, rejecting names that have no usable base component.
+// directory, rejecting names that have no usable base component. Both slash
+// kinds are treated as separators regardless of host OS, so a backslash in the
+// name cannot slip a path segment past filepath.Base on Linux.
 func (m *Manager) base(name string) (string, error) {
-	b := filepath.Base(filepath.FromSlash(name))
-	if b == "." || b == ".." || b == string(filepath.Separator) || b == "" {
+	slashed := strings.ReplaceAll(filepath.ToSlash(name), `\`, "/")
+	b := path.Base(slashed)
+	if b == "." || b == ".." || b == "/" || b == "" {
 		return "", fmt.Errorf("invalid asset name %q", name)
 	}
 	return b, nil

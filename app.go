@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -614,9 +615,11 @@ func (a *App) SaveImages(images map[string]string) error {
 		}
 
 		// filename comes from card ids, which the user can edit — keep only the
-		// base name so it cannot write outside the chosen folder.
-		base := filepath.Base(filepath.FromSlash(filename))
-		if base == "." || base == ".." || base == "" {
+		// base name so it cannot write outside the chosen folder. Normalise
+		// backslashes too so the guard holds on Linux, where "\" is an ordinary
+		// filename character that filepath.Base would not strip.
+		base := path.Base(strings.ReplaceAll(filepath.ToSlash(filename), `\`, "/"))
+		if base == "." || base == ".." || base == "/" || base == "" {
 			return fmt.Errorf("invalid image name %q", filename)
 		}
 		if err := os.WriteFile(filepath.Join(selection, base), dec, 0o644); err != nil {
