@@ -14,7 +14,7 @@ export function ExportGameXLSX(arg1:game.Game):Promise<void>;
 
 export function ExportXLSX(arg1:Array<deck.Card>,arg2:Array<deck.FieldDefinition>):Promise<void>;
 
-export function GeneratePDF(arg1:deck.Deck):Promise<void>;
+export function GeneratePDF(arg1:deck.Deck,arg2:Array<deck.RenderedCard>):Promise<void>;
 
 export function GetExcelHeaders(arg1:string,arg2:string):Promise<Array<string>>;
 

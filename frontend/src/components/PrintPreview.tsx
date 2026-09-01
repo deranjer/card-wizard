@@ -120,11 +120,13 @@ export function PrintPreview({ deck, onNavigateToHelp }: PrintPreviewProps) {
       return;
     }
     try {
-      await GeneratePDF({
-        ...deck,
-        renderedCards: renderedImages,
-        drawCutGuides: showCutGuides,
-      } as any);
+      await GeneratePDF(
+        {
+          ...deck,
+          drawCutGuides: showCutGuides,
+        } as any,
+        renderedImages as any
+      );
       notifications.show({ title: 'Success', message: 'PDF generated successfully' });
     } catch (err) {
       console.error('PDF generation error:', err);

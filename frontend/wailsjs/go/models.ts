@@ -198,7 +198,6 @@ export namespace deck {
 	    customFonts?: CustomFont[];
 	    paperSize: string;
 	    drawCutGuides: boolean;
-	    renderedCards: RenderedCard[];
 	
 	    static createFrom(source: any = {}) {
 	        return new Deck(source);
@@ -219,7 +218,6 @@ export namespace deck {
 	        this.customFonts = this.convertValues(source["customFonts"], CustomFont);
 	        this.paperSize = source["paperSize"];
 	        this.drawCutGuides = source["drawCutGuides"];
-	        this.renderedCards = this.convertValues(source["renderedCards"], RenderedCard);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
