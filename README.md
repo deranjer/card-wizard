@@ -26,6 +26,21 @@ Card Wizard is organized by "games" which are collections of decks. Each deck ha
 - **Asset Gallery**: Manage project-specific images with bulk upload, replace, and delete capabilities.
 - **In App Help**: Access help documentation directly from the application.
 
+### Frontend loading
+
+Project loading keeps the core workspace UI in the initial bundle. Card Design,
+Preview, Export, and Print Preview are loaded on demand when their tab is opened;
+each tab shows a loading state and offers a retry if its chunk cannot be fetched.
+
+Measured with `cd frontend && npm run build` (Vite 7 production build):
+
+- Initial JavaScript entry: 473.74 kB (146.75 kB gzip)
+- Card Design: 180.24 kB (55.63 kB gzip), loaded on demand
+- Preview: 4.00 kB (1.67 kB gzip), loaded on demand
+- Export: 2.10 kB (0.85 kB gzip), loaded on demand
+- Print Preview: 4.92 kB (2.13 kB gzip), loaded on demand
+- Image rendering (`html2canvas-pro`): 251.47 kB (64.29 kB gzip), loaded only when an image or print preview render is requested
+
 
 ## 📸 Screenshots
 
