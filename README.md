@@ -9,6 +9,15 @@ Note: v0.2.0 is a rework of the application. The save format has changed and is 
 
 Card Wizard is organized by "games" which are collections of decks. Each deck has its own card styles and card layouts.
 
+### Project format
+
+`.cwiz` files are ZIP archives containing `game.json` and project assets. The
+current `game.json` contract is the embedded versioned JSON Schema at
+[`internal/game/game-v1.schema.json`](internal/game/game-v1.schema.json).
+Card Wizard validates the document after migrating older saves and before
+writing either `.cwiz` or legacy JSON files; saves made by a newer schema
+version are rejected with an actionable compatibility error.
+
 ## ✨ Features
 
 - **Spreadsheet Integration**: Import and export card data directly from Excel (`.xlsx`) files or edit data within the app using the built-in spreadsheet view.

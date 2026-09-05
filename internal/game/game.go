@@ -27,6 +27,16 @@ func (g *Game) Stamp() {
 // without is treated as a bare Deck (the pre-1.0 save format) and wrapped in a
 // single-deck game.
 func Load(data []byte) (Game, error) {
+	var versionProbe struct {
+		SchemaVersion int `json:"schemaVersion"`
+	}
+	if err := json.Unmarshal(data, &versionProbe); err != nil {
+		return Game{}, fmt.Errorf("invalid game.json: %w", err)
+	}
+	if versionProbe.SchemaVersion > CurrentSchemaVersion {
+		return Game{}, fmt.Errorf("game.json uses newer schema version %d; this build supports up to %d", versionProbe.SchemaVersion, CurrentSchemaVersion)
+	}
+
 	var probe struct {
 		Decks json.RawMessage `json:"decks"`
 	}
@@ -39,7 +49,11 @@ func Load(data []byte) (Game, error) {
 		if err := json.Unmarshal(data, &g); err != nil {
 			return Game{}, fmt.Errorf("invalid game.json: %w", err)
 		}
-		return migrate(g), nil
+		g = migrate(g)
+		if err := Validate(g); err != nil {
+			return Game{}, fmt.Errorf("invalid game.json: %w", err)
+		}
+		return g, nil
 	}
 
 	// No decks -> bare Deck document.
@@ -50,7 +64,11 @@ func Load(data []byte) (Game, error) {
 	if d.ID == "" {
 		d.ID = "deck-1"
 	}
-	return migrate(Game{Name: d.Name, Decks: []deck.Deck{d}}), nil
+	g := migrate(Game{Name: d.Name, Decks: []deck.Deck{d}})
+	if err := Validate(g); err != nil {
+		return Game{}, fmt.Errorf("invalid deck document: %w", err)
+	}
+	return g, nil
 }
 
 // migrate brings a decoded game up to CurrentSchemaVersion. Each case falls
