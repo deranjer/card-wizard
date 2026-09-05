@@ -12,7 +12,7 @@ import {
   Drawer,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { useEffect, useState } from 'react';
+import { Component, lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import {
   IconPlus,
@@ -44,15 +44,65 @@ import {
   resetGameAtom,
 } from '../store/game';
 import { DeckDetails } from './DeckDetails';
-import { StyleEditor } from './StyleEditor';
-import { DeckPreview } from './DeckPreview';
-import { PrintPreview } from './PrintPreview';
 import { Help } from './Help';
 import { AssetGallery } from './AssetGallery';
-import { DeckExport } from './DeckExport';
 import { KeyStatsModal } from './KeyStatsModal';
 import { SaveGame, LoadGame, NewGame, SaveImages, ExportGameXLSX } from '../../wailsjs/go/main/App';
 import { notifications } from '@mantine/notifications';
+
+// These tabs pull in the canvas renderer and drag-and-drop dependencies. Keep
+// the project-loading UI in the initial bundle and fetch each area only when a
+// user opens it.
+const StyleEditor = lazy(() =>
+  import('./StyleEditor').then(({ StyleEditor: Component }) => ({ default: Component }))
+);
+const DeckPreview = lazy(() =>
+  import('./DeckPreview').then(({ DeckPreview: Component }) => ({ default: Component }))
+);
+const DeckExport = lazy(() =>
+  import('./DeckExport').then(({ DeckExport: Component }) => ({ default: Component }))
+);
+const PrintPreview = lazy(() =>
+  import('./PrintPreview').then(({ PrintPreview: Component }) => ({ default: Component }))
+);
+
+class LazyTabErrorBoundary extends Component<
+  { children: ReactNode; tabName: string },
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <Text c="red">
+          {this.props.tabName} could not be loaded.{' '}
+          <Button
+            variant="subtle"
+            size="compact-sm"
+            onClick={() => this.setState({ failed: false })}
+          >
+            Try again
+          </Button>
+        </Text>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+function LazyTab({ children, tabName }: { children: ReactNode; tabName: string }) {
+  return (
+    <LazyTabErrorBoundary tabName={tabName}>
+      <Suspense fallback={<Text c="dimmed">Loading {tabName}…</Text>}>{children}</Suspense>
+    </LazyTabErrorBoundary>
+  );
+}
 
 export function GameView() {
   const game = useAtomValue(gameAtom);
@@ -345,7 +395,9 @@ export function GameView() {
           </Tabs.Panel>
 
           <Tabs.Panel value="design">
-            <StyleEditor key={activeDeck.id} deck={activeDeck} setDeck={updateDeck} />
+            <LazyTab tabName="Card Design">
+              <StyleEditor key={activeDeck.id} deck={activeDeck} setDeck={updateDeck} />
+            </LazyTab>
           </Tabs.Panel>
 
           <Tabs.Panel value="gallery">
@@ -353,15 +405,29 @@ export function GameView() {
           </Tabs.Panel>
 
           <Tabs.Panel value="preview">
-            <DeckPreview key={activeDeck.id} deck={activeDeck} onNavigateToHelp={navigateToHelp} />
+            <LazyTab tabName="Preview">
+              <DeckPreview
+                key={activeDeck.id}
+                deck={activeDeck}
+                onNavigateToHelp={navigateToHelp}
+              />
+            </LazyTab>
           </Tabs.Panel>
 
           <Tabs.Panel value="export">
-            <DeckExport key={activeDeck.id} deck={activeDeck} />
+            <LazyTab tabName="Export">
+              <DeckExport key={activeDeck.id} deck={activeDeck} />
+            </LazyTab>
           </Tabs.Panel>
 
           <Tabs.Panel value="print">
-            <PrintPreview key={activeDeck.id} deck={activeDeck} onNavigateToHelp={navigateToHelp} />
+            <LazyTab tabName="Print Preview">
+              <PrintPreview
+                key={activeDeck.id}
+                deck={activeDeck}
+                onNavigateToHelp={navigateToHelp}
+              />
+            </LazyTab>
           </Tabs.Panel>
         </Tabs>
       </AppShell.Main>
