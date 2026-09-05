@@ -318,6 +318,9 @@ func (a *App) SaveGame(g game.Game) error {
 	}
 
 	g.Stamp() // record the schema version we're writing
+	if err := game.Validate(g); err != nil {
+		return fmt.Errorf("invalid game: %w", err)
+	}
 
 	// Always save game.json to working directory first
 	data, err := json.MarshalIndent(g, "", "  ")
