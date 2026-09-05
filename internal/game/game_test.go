@@ -2,6 +2,7 @@ package game
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"card_wizard/internal/deck"
@@ -61,5 +62,35 @@ func TestLoadWrapsBareDeck(t *testing.T) {
 func TestLoadRejectsGarbage(t *testing.T) {
 	if _, err := Load([]byte(`not json at all`)); err == nil {
 		t.Fatal("expected error for non-JSON input")
+	}
+}
+
+func TestLoadRejectsNewerSchema(t *testing.T) {
+	_, err := Load([]byte(`{"schemaVersion":2,"name":"Future","decks":[{"id":"d1","name":"Deck"}]}`))
+	if err == nil {
+		t.Fatal("expected newer schema version to be rejected")
+	}
+}
+
+func TestLoadRejectsSchemaInvariantViolations(t *testing.T) {
+	tests := []string{
+		`{"schemaVersion":1,"name":"","decks":[{"id":"d1","name":"Deck"}]}`,
+		`{"schemaVersion":1,"name":"Game","decks":[]}`,
+		`{"schemaVersion":1,"name":"Game","decks":[{"id":"","name":"Deck"}]}`,
+		`{"schemaVersion":1,"name":"Game","decks":[{"id":"d1","name":""}]}`,
+	}
+	for _, raw := range tests {
+		if _, err := Load([]byte(raw)); err == nil {
+			t.Errorf("Load(%s) unexpectedly succeeded", raw)
+		}
+	}
+}
+
+func TestSchemaV1IsEmbeddedAndDescribesCurrentVersion(t *testing.T) {
+	if !json.Valid(SchemaV1) {
+		t.Fatal("SchemaV1 is not valid JSON")
+	}
+	if !strings.Contains(string(SchemaV1), `"schemaVersion": { "const": 1 }`) {
+		t.Fatal("SchemaV1 does not describe the current schema version")
 	}
 }

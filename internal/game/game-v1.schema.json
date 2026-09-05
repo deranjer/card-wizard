@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cardwizard.app/schemas/game-v1.schema.json",
+  "title": "Card Wizard game project",
+  "description": "The version 1 game.json document stored in a .cwiz archive.",
+  "type": "object",
+  "required": ["schemaVersion", "name", "decks"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "decks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "name"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "name": { "type": "string", "minLength": 1 },
+          "cards": { "type": "array" },
+          "fields": { "type": "array" },
+          "frontStyles": { "type": "object" },
+          "backStyles": { "type": "object" }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}
