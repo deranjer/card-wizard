@@ -1,5 +1,6 @@
 import type { Deck } from '../types';
 import { CardRender } from '../components/CardRender';
+import { prepareExportImages } from './prepareExportImages';
 
 export interface RenderedFace {
   deckName: string;
@@ -30,6 +31,7 @@ export async function renderDeckFaces(
   { scale = 2, onProgress }: RenderOptions = {}
 ): Promise<RenderedFace[]> {
   const { createRoot } = await import('react-dom/client');
+  const { flushSync } = await import('react-dom');
   const html2canvas = (await import('html2canvas-pro')).default;
 
   const container = document.createElement('div');
@@ -45,15 +47,15 @@ export async function renderDeckFaces(
     container.appendChild(host);
     const root = createRoot(host);
     try {
-      await new Promise<void>((resolve) => {
+      flushSync(() => {
         root.render(
           <div style={{ width: 'fit-content', height: 'fit-content', background: 'white' }}>
             <CardRender deck={deck} card={card} mode={side} scale={1} />
           </div>
         );
-        // Give React a commit + the browser a layout pass before capture.
-        setTimeout(resolve, 100);
       });
+      await document.fonts?.ready;
+      await prepareExportImages(host);
       const canvas = await html2canvas(host.firstChild as HTMLElement, {
         backgroundColor: null,
         logging: false,
